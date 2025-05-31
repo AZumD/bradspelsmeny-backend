@@ -49,6 +49,47 @@ app.get('/games', (req, res) => {
 });
 
 // PUT update a game
+// 🔥 POST a new game
+app.post('/games', (req, res) => {
+  const {
+    title_sv,
+    title_en,
+    description_sv,
+    description_en,
+    players,
+    time,
+    age,
+    tags,
+    img,
+    rules
+  } = req.body;
+
+  const query = `
+  INSERT INTO games (
+    title_sv, title_en, description_sv, description_en,
+    players, time, age, tags, img, rules
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  db.run(query, [
+    title_sv,
+    title_en,
+    description_sv,
+    description_en,
+    players,
+    time,
+    age,
+    Array.isArray(tags) ? tags.join(',') : tags, // support array or string
+         img,
+         rules
+  ], function (err) {
+    if (err) {
+      console.error('❌ Failed to insert game:', err);
+      return res.status(500).json({ error: 'Failed to insert game' });
+    }
+    res.status(201).json({ message: '✅ Game added!', id: this.lastID });
+  });
+});
 app.put('/games/:id', (req, res) => {
   const id = parseInt(req.params.id);
   const {
