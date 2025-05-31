@@ -36,35 +36,6 @@
     res.send('pong');
   });
 
-  // Temporary seeding route
-  app.get('/seed', (req, res) => {
-    const sampleGames = [
-      {
-        title_sv: 'Motståndsrörelsen',
-        title_en: 'The Resistance',
-        description_sv: 'Ett socialt bluffspel där du aldrig kan lita på någon.',
-        description_en: 'A social deduction game of trust and betrayal.',
-        players: '5–10',
-        time: '30 min',
-        age: '13+',
-        tags: 'social,party',
-        img: 'https://www.worldofboardgames.com/product_images/11041-1-L.jpg',
-        rules: 'The Resistance Rulebook.pdf'
-      },
-      {
-        title_sv: 'Munchkin',
-        title_en: 'Munchkin',
-        description_sv: 'Ett kaotiskt kortspel om att döda monster och stjäla deras skatter.',
-        description_en: 'A chaotic card game about killing monsters and stealing their loot.',
-        players: '3–6',
-        time: '60+ min',
-        age: '10+',
-        tags: 'party,humor,card',
-        img: 'https://www.worldofboardgames.com/product_images/1877-1-L.jpg',
-        rules: 'Munchkin_Rules.pdf'
-      }
-    ];
-
     const stmt = db.prepare(`
     INSERT INTO games (
       title_sv, title_en, description_sv, description_en,
