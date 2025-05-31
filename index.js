@@ -49,6 +49,20 @@ app.get('/games', (req, res) => {
 });
 
 // PUT update a game
+app.delete('/games/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  db.run('DELETE FROM games WHERE id = ?', [id], function (err) {
+    if (err) {
+      console.error('❌ Failed to delete game:', err);
+      res.status(500).json({ error: 'Failed to delete game' });
+    } else if (this.changes === 0) {
+      res.status(404).json({ error: 'Game not found' });
+    } else {
+      res.json({ message: '✅ Game deleted successfully' });
+    }
+  });
+});
+
 // 🔥 POST a new game
 app.post('/games', (req, res) => {
   const {
