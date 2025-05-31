@@ -3,13 +3,32 @@ const cors = require('cors');
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json()); // Middleware to parse JSON
+// Create upload folder if it doesn't exist
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// Connect to SQLite database
+// Multer setup for handling file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext);
+    const unique = Date.now();
+    cb(null, `${base}-${unique}${ext}`);
+  }
+});
+const upload = multer({ storage });
+
+app.use(cors());
+app.use(express.json());
+app.use('/uploads', express.static(uploadDir));
+
 const db = new sqlite3.Database(path.join(__dirname, 'bradspelsmeny.db'), err => {
   if (err) return console.error('DB connection error:', err);
   console.log('✅ Connected to SQLite DB');
@@ -31,12 +50,10 @@ const db = new sqlite3.Database(path.join(__dirname, 'bradspelsmeny.db'), err =>
   `);
 });
 
-// Health check
 app.get('/ping', (req, res) => {
   res.send('pong');
 });
 
-// GET all games
 app.get('/games', (req, res) => {
   db.all('SELECT * FROM games', [], (err, rows) => {
     if (err) {
@@ -48,7 +65,6 @@ app.get('/games', (req, res) => {
   });
 });
 
-// PUT update a game
 app.delete('/games/:id', (req, res) => {
   const id = parseInt(req.params.id);
   db.run('DELETE FROM games WHERE id = ?', [id], function (err) {
@@ -63,20 +79,12 @@ app.delete('/games/:id', (req, res) => {
   });
 });
 
-// 🔥 POST a new game
-app.post('/games', (req, res) => {
-  const {
-    title_sv,
-    title_en,
-    description_sv,
-    description_en,
-    players,
-    time,
-    age,
-    tags,
-    img,
-    rules
-  } = req.body;
+app.post('/games', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), (req, res) => {
+  const body = req.body;
+  const files = req.files || {};
+
+  const imgUrl = files.imgFile?.[0] ? `/uploads/${files.imgFile[0].filename}` : body.img;
+  const rulesUrl = files.rulesFile?.[0] ? `/uploads/${files.rulesFile[0].filename}` : body.rules;
 
   const query = `
   INSERT INTO games (
@@ -86,16 +94,16 @@ app.post('/games', (req, res) => {
   `;
 
   db.run(query, [
-    title_sv,
-    title_en,
-    description_sv,
-    description_en,
-    players,
-    time,
-    age,
-    Array.isArray(tags) ? tags.join(',') : tags, // support array or string
-         img,
-         rules
+    body.title_sv || '',
+    body.title || '',
+    body.description_sv || '',
+    body.description_en || '',
+    body.players || '',
+    body.time || '',
+    body.age || '',
+    Array.isArray(body.tags) ? body.tags.join(',') : body.tags || '',
+    imgUrl,
+    rulesUrl
   ], function (err) {
     if (err) {
       console.error('❌ Failed to insert game:', err);
@@ -104,20 +112,14 @@ app.post('/games', (req, res) => {
     res.status(201).json({ message: '✅ Game added!', id: this.lastID });
   });
 });
-app.put('/games/:id', (req, res) => {
+
+app.put('/games/:id', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), (req, res) => {
   const id = parseInt(req.params.id);
-  const {
-    title_sv,
-    title_en,
-    description_sv,
-    description_en,
-    players,
-    time,
-    age,
-    tags,
-    img,
-    rules
-  } = req.body;
+  const body = req.body;
+  const files = req.files || {};
+
+  const imgUrl = files.imgFile?.[0] ? `/uploads/${files.imgFile[0].filename}` : body.img;
+  const rulesUrl = files.rulesFile?.[0] ? `/uploads/${files.rulesFile[0].filename}` : body.rules;
 
   db.run(
     `UPDATE games SET
@@ -133,16 +135,16 @@ app.put('/games/:id', (req, res) => {
     rules = ?
     WHERE id = ?`,
     [
-      title_sv,
-      title_en,
-      description_sv,
-      description_en,
-      players,
-      time,
-      age,
-      tags,
-      img,
-      rules,
+      body.title_sv || '',
+      body.title || '',
+      body.description_sv || '',
+      body.description_en || '',
+      body.players || '',
+      body.time || '',
+      body.age || '',
+      Array.isArray(body.tags) ? body.tags.join(',') : body.tags || '',
+      imgUrl,
+      rulesUrl,
       id
     ],
     function (err) {
@@ -156,7 +158,6 @@ app.put('/games/:id', (req, res) => {
   );
 });
 
-// Start the server
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
 });
