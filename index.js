@@ -94,7 +94,7 @@ app.post('/games', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), 
   `;
 
   db.run(query, [
-    body.title_sv || '',
+    (body.title_sv || body.title || ''),
     body.title || '',
     body.description_sv || '',
     body.description_en || '',
