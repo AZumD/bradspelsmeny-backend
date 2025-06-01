@@ -94,8 +94,9 @@ app.post('/games', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), 
   `;
 
   db.run(query, [
-    (body.title_sv || body.title || ''),
-    body.title || '',
+    body.title_sv || body.title_en || '',
+    body.title_en || '',
+
     body.description_sv || '',
     body.description_en || '',
     body.players || '',
@@ -135,8 +136,8 @@ app.put('/games/:id', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]
     rules = ?
     WHERE id = ?`,
     [
-      body.title_sv || '',
-      body.title || '',
+      body.title_sv || body.title_en || '',
+      body.title_en || '',
       body.description_sv || '',
       body.description_en || '',
       body.players || '',
