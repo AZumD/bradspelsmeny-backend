@@ -157,6 +157,40 @@ app.put('/games/:id', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]
     }
   );
 });
+app.post('/import', express.json(), (req, res) => {
+  const games = req.body;
+
+  if (!Array.isArray(games)) {
+    return res.status(400).json({ error: 'Expected an array of games.' });
+  }
+
+  const stmt = db.prepare(`
+    INSERT INTO games (
+      title_sv, title_en, description_sv, description_en,
+      players, time, age, tags, img, rules
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  let count = 0;
+  for (const game of games) {
+    stmt.run(
+      game.title_sv || '',
+      game.title_en || '',
+      game.description_sv || '',
+      game.description_en || '',
+      game.players || '',
+      game.time || '',
+      game.age || '',
+      Array.isArray(game.tags) ? game.tags.join(',') : game.tags || '',
+      game.img || '',
+      game.rules || ''
+    );
+    count++;
+  }
+
+  stmt.finalize();
+  res.json({ message: `✅ Imported ${count} games` });
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
