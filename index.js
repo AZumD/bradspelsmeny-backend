@@ -173,6 +173,25 @@ app.put('/games/:id', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]
   }
 });
 
+app.post('/users', async (req, res) => {
+  const { name, email } = req.body;
+
+  if (!name || !email) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *`,
+                                    [name, email]
+    );
+    res.status(201).json({ message: '✅ User created', user: result.rows[0] });
+  } catch (err) {
+    console.error('❌ Failed to create user:', err);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
