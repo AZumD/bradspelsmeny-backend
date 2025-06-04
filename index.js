@@ -93,6 +93,15 @@ app.post('/admin/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
+app.get('/users', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM users ORDER BY last_name ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch users:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
 
 app.get('/games', async (req, res) => {
   try {
