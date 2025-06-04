@@ -10,9 +10,11 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Ensure upload directory exists
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
+// File upload config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
                                    filename: (req, file, cb) => {
@@ -26,8 +28,10 @@ const upload = multer({ storage });
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(uploadDir));
 
+// DB connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -36,6 +40,8 @@ const pool = new Pool({
 app.get('/ping', (req, res) => {
   res.send('pong');
 });
+
+// ─── Games ──────────────────────────────────────────────────────────────
 
 app.get('/games', async (req, res) => {
   try {
@@ -94,37 +100,6 @@ app.post('/games', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), 
   }
 });
 
-app.post('/lend/:id', async (req, res) => {
-  const gameId = parseInt(req.params.id);
-  const { userId, note } = req.body;
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    await client.query(`
-    UPDATE games
-    SET lent_out = true,
-    times_lent = COALESCE(times_lent, 0) + 1,
-                       last_lent = CURRENT_TIMESTAMP
-                       WHERE id = $1
-                       `, [gameId]);
-
-    await client.query(`
-    INSERT INTO game_history (game_id, user_id, action, note)
-    VALUES ($1, $2, 'lent', $3)
-    `, [gameId, userId || null, note || null]);
-
-    await client.query('COMMIT');
-    res.json({ message: '✅ Game lent out and logged' });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Failed to log lending' });
-  } finally {
-    client.release();
-  }
-});
-
 app.put('/games/:id', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), async (req, res) => {
   const id = parseInt(req.params.id);
   const body = req.body;
@@ -173,24 +148,102 @@ app.put('/games/:id', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]
   }
 });
 
-app.post('/users', async (req, res) => {
-  const { name, email } = req.body;
+app.post('/lend/:id', async (req, res) => {
+  const gameId = parseInt(req.params.id);
+  const { userId, note } = req.body;
 
-  if (!name || !email) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(`
+    UPDATE games
+    SET lent_out = true,
+    times_lent = COALESCE(times_lent, 0) + 1,
+                       last_lent = CURRENT_TIMESTAMP
+                       WHERE id = $1
+                       `, [gameId]);
+
+    await client.query(`
+    INSERT INTO game_history (game_id, user_id, action, note)
+    VALUES ($1, $2, 'lent', $3)
+    `, [gameId, userId || null, note || null]);
+
+    await client.query('COMMIT');
+    res.json({ message: '✅ Game lent out and logged' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Failed to log lending' });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── Users ──────────────────────────────────────────────────────────────
+
+app.get('/users', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM users');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch users:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+app.post('/users', async (req, res) => {
+  const { username, password, first_name, last_name, phone, email, id_number } = req.body;
+
+  if (!first_name || !last_name) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
   try {
-    const result = await pool.query(
-      `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *`,
-                                    [name, email]
-    );
+    const result = await pool.query(`
+    INSERT INTO users (username, password, first_name, last_name, phone, email, id_number)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *
+    `, [username || null, password || null, first_name, last_name, phone || null, email || null, id_number || null]);
+
     res.status(201).json({ message: '✅ User created', user: result.rows[0] });
   } catch (err) {
     console.error('❌ Failed to create user:', err);
     res.status(500).json({ error: 'Failed to create user' });
   }
 });
+
+app.put('/users/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { username, password, first_name, last_name, phone, email, id_number } = req.body;
+
+  try {
+    await pool.query(`
+    UPDATE users SET
+    username = $1, password = $2, first_name = $3, last_name = $4,
+    phone = $5, email = $6, id_number = $7
+    WHERE id = $8
+    `, [username || null, password || null, first_name, last_name, phone || null, email || null, id_number || null, id]);
+
+    res.json({ message: '✅ User updated' });
+  } catch (err) {
+    console.error('❌ Failed to update user:', err);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+app.delete('/users/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+
+  try {
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    res.json({ message: '✅ User deleted' });
+  } catch (err) {
+    console.error('❌ Failed to delete user:', err);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// ─── Server ──────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
