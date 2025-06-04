@@ -77,4 +77,19 @@ app.post('/admin/login', async (req, res) => {
   }
 });
 
+// Restore /games endpoint
+app.get('/games', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM games ORDER BY title_sv ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch games:', err);
+    res.status(500).json({ error: 'Failed to fetch games' });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
 module.exports = { verifyToken };
