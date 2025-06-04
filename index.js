@@ -190,6 +190,36 @@ app.post('/lend/:id', async (req, res) => {
   }
 });
 
+// ✅ NEW: Return game endpoint
+app.post('/return/:id', async (req, res) => {
+  const gameId = parseInt(req.params.id);
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    await client.query(`
+    UPDATE games
+    SET lent_out = false
+    WHERE id = $1
+    `, [gameId]);
+
+    await client.query(`
+    INSERT INTO game_history (game_id, action)
+    VALUES ($1, 'returned')
+    `, [gameId]);
+
+    await client.query('COMMIT');
+    res.json({ message: '✅ Game returned and logged' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('❌ Failed to return game:', err);
+    res.status(500).json({ error: 'Failed to return game' });
+  } finally {
+    client.release();
+  }
+});
+
 // ─── Users ──────────────────────────────────────────────────────────────
 
 app.get('/users', async (req, res) => {
