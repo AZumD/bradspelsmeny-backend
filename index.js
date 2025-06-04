@@ -38,24 +38,38 @@ function verifyToken(req, res, next) {
   });
 }
 
-app.post('/admin/register', async (req, res) => {
+app.post('/admin/login', async (req, res) => {
   const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
+
+  if (!username || !password) {
+    console.log('🚫 Missing login fields');
+    return res.status(400).json({ error: 'Missing username or password' });
+  }
 
   try {
-    const hash = await bcrypt.hash(password, 10);
-    const result = await pool.query(`
-    INSERT INTO admin_users (username, password)
-    VALUES ($1, $2)
-    RETURNING id, username
-    `, [username, hash]);
+    const result = await pool.query('SELECT * FROM admin_users WHERE username = $1', [username]);
+    const user = result.rows[0];
+    if (!user) {
+      console.log('❌ No such user:', username);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
-    res.status(201).json({ message: '✅ Admin created', user: result.rows[0] });
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      console.log('❌ Password mismatch');
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '2h' });
+
+    console.log(`✅ Admin login: ${username}`);
+    res.json({ token });
   } catch (err) {
-    console.error('❌ Failed to register admin:', err);
-    res.status(500).json({ error: 'Failed to register admin' });
+    console.error('❌ Login failed:', err);
+    res.status(500).json({ error: 'Login failed' });
   }
 });
+
 
 app.post('/admin/login', async (req, res) => {
   const { username, password } = req.body;
