@@ -19,7 +19,10 @@ const pool = new Pool({
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-app.use(cors());
+app.use(cors({
+  origin: 'https://azumd.github.io',
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -73,3 +76,5 @@ app.post('/admin/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
+
+module.exports = { verifyToken };
