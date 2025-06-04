@@ -45,13 +45,45 @@ app.get('/ping', (req, res) => {
 
 app.get('/games', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM games');
-    const parsedRows = result.rows.map(game => ({
-      ...game,
-      staff_picks: game.staff_picks ? JSON.parse(game.staff_picks) : []
-    }));
+    const result = await pool.query(`
+    SELECT g.*, gh.first_name, gh.last_name, gh.note, gh.timestamp
+    FROM games g
+    LEFT JOIN LATERAL (
+      SELECT gh.user_id, gh.note, gh.timestamp, u.first_name, u.last_name
+      FROM game_history gh
+      LEFT JOIN users u ON gh.user_id = u.id
+      WHERE gh.game_id = g.id AND gh.action = 'lent'
+      ORDER BY gh.timestamp DESC
+      LIMIT 1
+    ) gh ON true
+    `);
+
+    const parsedRows = result.rows.map(row => {
+      const game = {
+        ...row,
+        staff_picks: row.staff_picks ? JSON.parse(row.staff_picks) : [],
+      };
+
+      if (row.lent_out && row.timestamp) {
+        game.last_lend = {
+          first_name: row.first_name,
+          last_name: row.last_name,
+          note: row.note,
+          timestamp: row.timestamp
+        };
+      }
+
+      delete game.first_name;
+      delete game.last_name;
+      delete game.note;
+      delete game.timestamp;
+
+      return game;
+    });
+
     res.json(parsedRows);
   } catch (err) {
+    console.error('❌ Failed to fetch games with lend info:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -190,7 +222,6 @@ app.post('/lend/:id', async (req, res) => {
   }
 });
 
-// ✅ NEW: Return game endpoint
 app.post('/return/:id', async (req, res) => {
   const gameId = parseInt(req.params.id);
   const client = await pool.connect();
