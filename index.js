@@ -1,5 +1,7 @@
 require('dotenv').config();
 
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const express = require('express');
 const { Pool } = require('pg');
@@ -108,7 +110,7 @@ app.post('/games', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), 
 
   const slowDay = parseInt(body.slow_day_only) === 1 ? 1 : 0;
   const trusted = parseInt(body.trusted_only) === 1 ? 1 : 0;
-  const maxSize = parseInt(body.max_table_size) || null;
+  const minSize = parseInt(body.max_table_size) || null;
   const rating = parseInt(body.condition_rating) || null;
   const staffList = body.staff_picks
   ? JSON.stringify(body.staff_picks.split(',').map(name => name.trim()))
@@ -255,7 +257,7 @@ app.post('/return/:id', async (req, res) => {
 
 app.get('/users', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM users');
+    const result = await pool.query('SELECT * FROM users WHERE archived = false');
     res.json(result.rows);
   } catch (err) {
     console.error('❌ Failed to fetch users:', err);
@@ -307,21 +309,16 @@ app.delete('/users/:id', async (req, res) => {
   const id = parseInt(req.params.id);
 
   try {
-    // Check if the user has lending history
-    const usageCheck = await pool.query(
-      'SELECT COUNT(*) FROM game_history WHERE user_id = $1',
-                                        [id]
-    );
+    const result = await pool.query('UPDATE users SET archived = true WHERE id = $1', [id]);
 
-    if (parseInt(usageCheck.rows[0].count) > 0) {
-      return res.status(400).json({ error: '❌ Kan inte ta bort användaren eftersom den har utlåningshistorik.' });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    await pool.query('DELETE FROM users WHERE id = $1', [id]);
-    res.json({ message: '✅ User deleted' });
+    res.json({ message: '✅ User archived (soft-deleted)' });
   } catch (err) {
-    console.error('❌ Failed to delete user:', err);
-    res.status(500).json({ error: 'Failed to delete user' });
+    console.error('❌ Failed to archive user:', err);
+    res.status(500).json({ error: 'Failed to archive user' });
   }
 });
 
