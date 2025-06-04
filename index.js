@@ -89,6 +89,29 @@ app.post('/games', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), 
     });
 });
 
+app.post('/lend/:id', (req, res) => {
+  const gameId = parseInt(req.params.id);
+  const { userId, note } = req.body;
+
+  db.serialize(() => {
+    db.run(`
+      UPDATE games
+      SET lent_out = 1,
+          times_lent = COALESCE(times_lent, 0) + 1,
+          last_lent = DATETIME('now')
+      WHERE id = ?
+    `, [gameId]);
+
+    db.run(`
+      INSERT INTO game_history (game_id, user_id, action, note)
+      VALUES (?, ?, 'lent', ?)
+    `, [gameId, userId || null, note || null], function (err) {
+      if (err) return res.status(500).json({ error: 'Failed to log lending' });
+      res.json({ message: '✅ Game lent out and logged' });
+    });
+  });
+});
+
 app.put('/games/:id', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), (req, res) => {
   const id = parseInt(req.params.id);
   const body = req.body;
