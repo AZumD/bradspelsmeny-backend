@@ -104,6 +104,26 @@ app.get('/games', async (req, res) => {
   }
 });
 
+app.get('/stats/total-games', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*) FROM games');
+    res.json({ total: parseInt(result.rows[0].count) });
+  } catch (err) {
+    console.error('❌ Failed to fetch total games:', err);
+    res.status(500).json({ error: 'Failed to fetch total games' });
+  }
+});
+
+app.get('/stats/lent-out', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*) FROM game_history WHERE returned_at IS NULL');
+    res.json({ lentOut: parseInt(result.rows[0].count) });
+  } catch (err) {
+    console.error('❌ Failed to fetch lent out games:', err);
+    res.status(500).json({ error: 'Failed to fetch lent out games' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
