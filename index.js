@@ -56,6 +56,17 @@ app.get('/games', async (req, res) => {
   }
 });
 
+app.delete('/games/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  try {
+    await pool.query('DELETE FROM games WHERE id = $1', [id]);
+    res.json({ message: '✅ Game deleted' });
+  } catch (err) {
+    console.error('❌ Failed to delete game:', err);
+    res.status(500).json({ error: 'Failed to delete game' });
+  }
+});
+
 app.post('/games', upload.fields([{ name: 'imgFile' }, { name: 'rulesFile' }]), async (req, res) => {
   const body = req.body;
   const files = req.files || {};
