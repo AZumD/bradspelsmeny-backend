@@ -307,6 +307,16 @@ app.delete('/users/:id', async (req, res) => {
   const id = parseInt(req.params.id);
 
   try {
+    // Check if the user has lending history
+    const usageCheck = await pool.query(
+      'SELECT COUNT(*) FROM game_history WHERE user_id = $1',
+                                        [id]
+    );
+
+    if (parseInt(usageCheck.rows[0].count) > 0) {
+      return res.status(400).json({ error: '❌ Kan inte ta bort användaren eftersom den har utlåningshistorik.' });
+    }
+
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
     res.json({ message: '✅ User deleted' });
   } catch (err) {
