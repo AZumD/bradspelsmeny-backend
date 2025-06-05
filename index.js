@@ -24,6 +24,8 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+const upload = multer(); // For handling multipart/form-data
+
 app.use(cors({
   origin: 'https://azumd.github.io',
   credentials: true
@@ -104,13 +106,28 @@ app.get('/games', async (req, res) => {
   }
 });
 
-app.post('/games', verifyToken, async (req, res) => {
-  const { title_sv, title_en, description_sv, description_en, category, min_players, max_players, play_time, age, tags, image } = req.body;
+app.post('/games', verifyToken, upload.none(), async (req, res) => {
+  const {
+    title_sv, title_en, description_sv, description_en,
+    category, min_players, max_players, play_time,
+    age, tags, image,
+    slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
+  } = req.body;
+
   try {
     const result = await pool.query(
-      `INSERT INTO games (title_sv, title_en, description_sv, description_en, category, min_players, max_players, play_time, age, tags, image)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-                                    [title_sv, title_en, description_sv, description_en, category, min_players, max_players, play_time, age, tags, image]
+      `INSERT INTO games (
+        title_sv, title_en, description_sv, description_en,
+        category, min_players, max_players, play_time,
+        age, tags, image,
+        slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+                                    [
+                                      title_sv, title_en, description_sv, description_en,
+                                    category, min_players, max_players, play_time,
+                                    age, tags, image,
+                                    !!slow_day_only, !!trusted_only, condition_rating, staff_picks, min_table_size
+                                    ]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -119,14 +136,31 @@ app.post('/games', verifyToken, async (req, res) => {
   }
 });
 
-
-app.put('/games/:id', verifyToken, async (req, res) => {
+app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
   const { id } = req.params;
-  const { title_sv, title_en, category, min_players, max_players } = req.body;
+  const {
+    title_sv, title_en, description_sv, description_en,
+    category, min_players, max_players, play_time,
+    age, tags, image,
+    slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
+  } = req.body;
+
   try {
     const result = await pool.query(
-      `UPDATE games SET title_sv=$1, title_en=$2, category=$3, min_players=$4, max_players=$5 WHERE id=$6 RETURNING *`,
-      [title_sv, title_en, category, min_players, max_players, id]
+      `UPDATE games SET
+      title_sv=$1, title_en=$2, description_sv=$3, description_en=$4,
+      category=$5, min_players=$6, max_players=$7, play_time=$8,
+      age=$9, tags=$10, image=$11,
+      slow_day_only=$12, trusted_only=$13, condition_rating=$14,
+      staff_picks=$15, min_table_size=$16
+      WHERE id=$17 RETURNING *`,
+      [
+        title_sv, title_en, description_sv, description_en,
+        category, min_players, max_players, play_time,
+        age, tags, image,
+        !!slow_day_only, !!trusted_only, condition_rating, staff_picks, min_table_size,
+        id
+      ]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -144,32 +178,6 @@ app.get('/users', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
-
-app.put('/users/:id', verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const { first_name, last_name, phone, username, password, email, id_number } = req.body;
-
-  try {
-    const result = await pool.query(
-      `UPDATE users
-      SET first_name = $1,
-      last_name = $2,
-      phone = $3,
-      username = $4,
-      email = $5,
-      id_number = $6
-      WHERE id = $7
-      RETURNING *`,
-      [first_name, last_name, phone, username, email, id_number, id]
-    );
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('❌ Failed to update user:', err);
-    res.status(500).json({ error: 'Failed to update user' });
-  }
-});
-
 
 app.post('/users', verifyToken, async (req, res) => {
   const { first_name, last_name, phone } = req.body;
