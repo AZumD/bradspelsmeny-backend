@@ -183,4 +183,3 @@ app.listen(PORT, () => {
 });
 
 module.exports = { verifyToken };
-'
