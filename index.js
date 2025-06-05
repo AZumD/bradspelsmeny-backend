@@ -126,7 +126,7 @@ app.post('/games', verifyToken, upload.none(), async (req, res) => {
                                       title_sv, title_en, description_sv, description_en,
                                     category, min_players, max_players, play_time,
                                     age, tags, image,
-                                    !!slow_day_only, !!trusted_only, condition_rating, staff_picks, min_table_size
+                                    !!slow_day_only, !!trusted_only, condition_rating || null, staff_picks || null, min_table_size || null
                                     ]
     );
     res.status(201).json(result.rows[0]);
@@ -158,7 +158,8 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
         title_sv, title_en, description_sv, description_en,
         category, min_players, max_players, play_time,
         age, tags, image,
-        !!slow_day_only, !!trusted_only, condition_rating, staff_picks, min_table_size,
+        !!slow_day_only, !!trusted_only, condition_rating || null,
+        staff_picks || null, min_table_size || null,
         id
       ]
     );
