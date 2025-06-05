@@ -93,6 +93,47 @@ app.post('/admin/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
+
+app.get('/games', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM games ORDER BY title_sv ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch games:', err);
+    res.status(500).json({ error: 'Failed to fetch games' });
+  }
+});
+
+app.post('/games', verifyToken, async (req, res) => {
+  const { title_sv, title_en, category, min_players, max_players } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO games (title_sv, title_en, category, min_players, max_players)
+      VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+                                    [title_sv, title_en, category, min_players, max_players]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to add game:', err);
+    res.status(500).json({ error: 'Failed to add game' });
+  }
+});
+
+app.put('/games/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { title_sv, title_en, category, min_players, max_players } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE games SET title_sv=$1, title_en=$2, category=$3, min_players=$4, max_players=$5 WHERE id=$6 RETURNING *`,
+      [title_sv, title_en, category, min_players, max_players, id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to update game:', err);
+    res.status(500).json({ error: 'Failed to update game' });
+  }
+});
+
 app.get('/users', verifyToken, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM users ORDER BY last_name ASC');
@@ -103,13 +144,17 @@ app.get('/users', verifyToken, async (req, res) => {
   }
 });
 
-app.get('/games', async (req, res) => {
+app.post('/users', verifyToken, async (req, res) => {
+  const { first_name, last_name, phone } = req.body;
   try {
-    const result = await pool.query('SELECT * FROM games ORDER BY title_sv ASC');
-    res.json(result.rows);
+    const result = await pool.query(
+      `INSERT INTO users (first_name, last_name, phone) VALUES ($1, $2, $3) RETURNING *`,
+                                    [first_name, last_name, phone]
+    );
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error('❌ Failed to fetch games:', err);
-    res.status(500).json({ error: 'Failed to fetch games' });
+    console.error('❌ Failed to add user:', err);
+    res.status(500).json({ error: 'Failed to add user' });
   }
 });
 
@@ -138,3 +183,4 @@ app.listen(PORT, () => {
 });
 
 module.exports = { verifyToken };
+'
