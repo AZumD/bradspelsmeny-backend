@@ -194,6 +194,28 @@ app.post('/users', verifyToken, async (req, res) => {
   }
 });
 
+app.put('/users/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { first_name, last_name, phone } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE users SET first_name = $1, last_name = $2, phone = $3 WHERE id = $4 RETURNING *`,
+      [first_name, last_name, phone, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to update user:', err);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+
 app.get('/stats/total-games', verifyToken, async (req, res) => {
   try {
     const result = await pool.query('SELECT COUNT(*) FROM games');
