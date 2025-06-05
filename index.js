@@ -105,12 +105,12 @@ app.get('/games', async (req, res) => {
 });
 
 app.post('/games', verifyToken, async (req, res) => {
-  const { title_sv, title_en, category, min_players, max_players } = req.body;
+  const { title_sv, title_en, description_sv, description_en, category, min_players, max_players, play_time, age, tags, image } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO games (title_sv, title_en, category, min_players, max_players)
-      VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-                                    [title_sv, title_en, category, min_players, max_players]
+      `INSERT INTO games (title_sv, title_en, description_sv, description_en, category, min_players, max_players, play_time, age, tags, image)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+                                    [title_sv, title_en, description_sv, description_en, category, min_players, max_players, play_time, age, tags, image]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -118,6 +118,7 @@ app.post('/games', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to add game' });
   }
 });
+
 
 app.put('/games/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
