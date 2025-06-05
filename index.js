@@ -144,6 +144,32 @@ app.get('/users', verifyToken, async (req, res) => {
   }
 });
 
+app.put('/users/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { first_name, last_name, phone, username, password, email, id_number } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE users
+      SET first_name = $1,
+      last_name = $2,
+      phone = $3,
+      username = $4,
+      email = $5,
+      id_number = $6
+      WHERE id = $7
+      RETURNING *`,
+      [first_name, last_name, phone, username, email, id_number, id]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to update user:', err);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+
 app.post('/users', verifyToken, async (req, res) => {
   const { first_name, last_name, phone } = req.body;
   try {
