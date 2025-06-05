@@ -107,7 +107,7 @@ app.get('/games', async (req, res) => {
 });
 
 app.post('/games', verifyToken, upload.none(), async (req, res) => {
-  cconst {
+  const {
     title_sv, title_en, description_sv, description_en,
     min_players, max_players, play_time,
     age, tags, img,
