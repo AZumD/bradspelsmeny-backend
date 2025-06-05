@@ -201,7 +201,7 @@ app.put('/users/:id', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE users SET first_name = $1, last_name = $2, phone = $3 WHERE id = $4 RETURNING *`,
-      [first_name, last_name, phone, id]
+      [first_name, last_name, phone, id, username, password, email, id_number, id_image_path]
     );
 
     if (result.rowCount === 0) {
