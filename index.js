@@ -107,10 +107,10 @@ app.get('/games', async (req, res) => {
 });
 
 app.post('/games', verifyToken, upload.none(), async (req, res) => {
-  const {
+  cconst {
     title_sv, title_en, description_sv, description_en,
     min_players, max_players, play_time,
-    age, tags, image,
+    age, tags, img,
     slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
   } = req.body;
 
@@ -119,13 +119,13 @@ app.post('/games', verifyToken, upload.none(), async (req, res) => {
       `INSERT INTO games (
         title_sv, title_en, description_sv, description_en,
         min_players, max_players, play_time,
-        age, tags, image,
+        age, tags, img,
         slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
                                     [
                                       title_sv, title_en, description_sv, description_en,
                                     min_players, max_players, play_time,
-                                    age, tags, image,
+                                    age, tags, img,
                                     !!slow_day_only, !!trusted_only, condition_rating || null, staff_picks || null, min_table_size || null
                                     ]
     );
@@ -141,7 +141,7 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
   const {
     title_sv, title_en, description_sv, description_en,
     min_players, max_players, play_time,
-    age, tags, image,
+    age, tags, img,
     slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
   } = req.body;
 
@@ -150,14 +150,14 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
       `UPDATE games SET
       title_sv=$1, title_en=$2, description_sv=$3, description_en=$4,
       min_players=$5, max_players=$6, play_time=$7,
-      age=$8, tags=$9, image=$10,
+      age=$8, tags=$9, img=$10,
       slow_day_only=$11, trusted_only=$12, condition_rating=$13,
       staff_picks=$14, min_table_size=$15
       WHERE id=$16 RETURNING *`,
       [
         title_sv, title_en, description_sv, description_en,
         min_players, max_players, play_time,
-        age, tags, image,
+        age, tags, img,
         !!slow_day_only, !!trusted_only, condition_rating || null,
         staff_picks || null, min_table_size || null,
         id
