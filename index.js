@@ -196,12 +196,38 @@ app.post('/users', verifyToken, async (req, res) => {
 
 app.put('/users/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { first_name, last_name, phone } = req.body;
+  const {
+    first_name,
+    last_name,
+    phone,
+    username,
+    password,
+    email,
+    id_number
+  } = req.body;
 
   try {
     const result = await pool.query(
-      `UPDATE users SET first_name = $1, last_name = $2, phone = $3 WHERE id = $4 RETURNING *`,
-      [first_name, last_name, phone, id, username, password, email, id_number, id_image_path]
+      `UPDATE users SET
+      first_name = COALESCE($1, first_name),
+                                    last_name = COALESCE($2, last_name),
+                                    phone = COALESCE($3, phone),
+                                    username = COALESCE($4, username),
+                                    password = COALESCE($5, password),
+                                    email = COALESCE($6, email),
+                                    id_number = COALESCE($7, id_number)
+                                    WHERE id = $8
+                                    RETURNING *`,
+                                    [
+                                      first_name || null,
+                                    last_name || null,
+                                    phone || null,
+                                    username || null,
+                                    password || null,
+                                    email || null,
+                                    id_number || null,
+                                    id
+                                    ]
     );
 
     if (result.rowCount === 0) {
@@ -210,10 +236,11 @@ app.put('/users/:id', verifyToken, async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('❌ Failed to update user:', err);
-    res.status(500).json({ error: 'Failed to update user' });
+    console.error("❌ Failed to update user:", err);
+    res.status(500).json({ error: "Failed to update user" });
   }
 });
+
 
 
 app.get('/stats/total-games', verifyToken, async (req, res) => {
