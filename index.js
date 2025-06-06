@@ -255,7 +255,7 @@ app.get('/stats/total-games', verifyToken, async (req, res) => {
 
 app.get('/stats/lent-out', verifyToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT COUNT(*) FROM game_history WHERE returned_at IS NULL');
+    const result = await pool.query('SELECT COUNT(*) FROM games WHERE lent_out = true');
     res.json({ lentOut: parseInt(result.rows[0].count) });
   } catch (err) {
     console.error('❌ Failed to fetch lent out games:', err);
