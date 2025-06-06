@@ -457,6 +457,61 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
   }
 });
 
+app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Fetch the order by id
+    const orderRes = await pool.query('SELECT * FROM game_orders WHERE id = $1', [id]);
+    const order = orderRes.rows[0];
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    // Standardize phone number by removing non-digits
+    const standardizedPhone = order.phone.replace(/\D/g, '');
+
+    // Check if user exists with that phone
+    const existingUserRes = await pool.query(
+      'SELECT * FROM users WHERE phone = $1',
+      [standardizedPhone]
+    );
+
+    let userId;
+    if (existingUserRes.rows.length > 0) {
+      // Use existing user ID
+      userId = existingUserRes.rows[0].id;
+    } else {
+      // Create new user and get new ID
+      const newUserRes = await pool.query(
+        `INSERT INTO users (first_name, last_name, phone) VALUES ($1, $2, $3) RETURNING id`,
+                                          [order.first_name, order.last_name, standardizedPhone]
+      );
+      userId = newUserRes.rows[0].id;
+    }
+
+    // Mark game as lent out and update stats
+    await pool.query(`
+    UPDATE games
+    SET lent_out = true,
+    last_lent = NOW(),
+                     times_lent = COALESCE(times_lent, 0) + 1
+                     WHERE id = $1
+                     `, [order.game_id]);
+
+    // Insert a lending record in game_history
+    await pool.query(`
+    INSERT INTO game_history (game_id, user_id, action, note)
+    VALUES ($1, $2, 'lend', $3)
+    `, [order.game_id, userId, `Auto-lend via order system (Table ${order.table_id})`]);
+
+    // Delete the processed order
+    await pool.query('DELETE FROM game_orders WHERE id = $1', [id]);
+
+    res.json({ message: '✅ Order completed successfully' });
+  } catch (err) {
+    console.error("❌ Failed to complete order:", err);
+    res.status(500).json({ error: "Failed to complete order" });
+  }
+});
 
 
 
