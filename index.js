@@ -287,20 +287,21 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to lend out game' });
   }
 });
-
 app.post('/return/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
 
   try {
+    // Mark game as returned
     await pool.query(`
     UPDATE games
     SET lent_out = false
     WHERE id = $1
     `, [id]);
 
+    // Insert a return action log with returned_at timestamp
     await pool.query(`
-    INSERT INTO game_history (game_id, action)
-    VALUES ($1, 'return')
+    INSERT INTO game_history (game_id, action, returned_at, timestamp)
+    VALUES ($1, 'return', NOW(), NOW())
     `, [id]);
 
     res.json({ message: '✅ Game returned' });
@@ -309,7 +310,6 @@ app.post('/return/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to return game' });
   }
 });
-
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
