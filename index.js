@@ -335,6 +335,25 @@ app.get('/games/:id/current-lend', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/stats/most-lent-this-month', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+    SELECT g.title_sv, COUNT(*) AS lend_count
+    FROM game_history gh
+    JOIN games g ON gh.game_id = g.id
+    WHERE gh.action = 'lend' AND gh.timestamp >= date_trunc('month', CURRENT_DATE)
+    GROUP BY g.title_sv
+    ORDER BY lend_count DESC
+    LIMIT 1
+    `);
+
+    res.json({ title: result.rows[0]?.title_sv || '–' });
+  } catch (err) {
+    console.error('❌ Failed to fetch most lent game this month:', err);
+    res.status(500).json({ error: 'Failed to fetch most lent game this month' });
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
