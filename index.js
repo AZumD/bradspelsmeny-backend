@@ -406,23 +406,34 @@ app.delete('/order-game', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to clear orders' });
   }
 });
+// COMPLETE ORDER: create user if not exists, then lend out game
 app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    // 1. Fetch the order
     const orderRes = await pool.query('SELECT * FROM game_orders WHERE id = $1', [id]);
     const order = orderRes.rows[0];
-    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (!order) return res.status(404).json({ error: "Order not found" });
 
-    // 2. Create a new user
-    const userRes = await pool.query(`
-    INSERT INTO users (first_name, last_name, phone)
-    VALUES ($1, $2, $3) RETURNING id
-    `, [order.first_name, order.last_name, order.phone]);
-    const userId = userRes.rows[0].id;
+    // 1. Check if user already exists
+    const existingUserRes = await pool.query(
+      'SELECT * FROM users WHERE phone = $1',
+      [order.phone]
+    );
+    let userId;
 
-    // 3. Mark game as lent out
+    if (existingUserRes.rows.length > 0) {
+      userId = existingUserRes.rows[0].id;
+    } else {
+      // 2. If not, create a new user
+      const newUserRes = await pool.query(
+        `INSERT INTO users (first_name, last_name, phone) VALUES ($1, $2, $3) RETURNING id`,
+                                          [order.first_name, order.last_name, order.phone]
+      );
+      userId = newUserRes.rows[0].id;
+    }
+
+    // 3. Lend out the game
     await pool.query(`
     UPDATE games
     SET lent_out = true,
@@ -431,21 +442,21 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
                      WHERE id = $1
                      `, [order.game_id]);
 
-    // 4. Log in game_history
     await pool.query(`
     INSERT INTO game_history (game_id, user_id, action, note)
     VALUES ($1, $2, 'lend', $3)
-    `, [order.game_id, userId, `Table ${order.table_id}`]);
+    `, [order.game_id, userId, `Auto-lend via order system (Table ${order.table_id})`]);
 
-    // 5. Delete the order
+    // 4. Delete the order after processing
     await pool.query('DELETE FROM game_orders WHERE id = $1', [id]);
 
-    res.json({ message: '✅ Order completed and game lent' });
+    res.json({ message: '✅ Order completed' });
   } catch (err) {
-    console.error('❌ Failed to complete order:', err);
-    res.status(500).json({ error: 'Failed to complete order' });
+    console.error("❌ Failed to complete order:", err);
+    res.status(500).json({ error: "Failed to complete order" });
   }
 });
+
 
 
 
