@@ -200,6 +200,7 @@ app.post('/users', verifyToken, async (req, res) => {
 });
 
 
+
 app.put('/users/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
   const {
@@ -273,6 +274,10 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
   const { userId, note } = req.body;
 
+  if (!userId || isNaN(parseInt(userId))) {
+    return res.status(400).json({ error: 'Missing or invalid userId' });
+  }
+
   try {
     await pool.query(`
     UPDATE games
@@ -293,6 +298,7 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to lend out game' });
   }
 });
+
 app.post('/return/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
 
