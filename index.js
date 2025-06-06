@@ -263,6 +263,32 @@ app.get('/stats/lent-out', verifyToken, async (req, res) => {
   }
 });
 
+app.post('/lend/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { userId, note } = req.body;
+
+  try {
+    await pool.query(`
+    UPDATE games
+    SET lent_out = true,
+    last_lent = NOW(),
+                     times_lent = COALESCE(times_lent, 0) + 1
+                     WHERE id = $1
+                     `, [id]);
+
+    await pool.query(`
+    INSERT INTO game_history (game_id, user_id, action, note)
+    VALUES ($1, $2, 'lend', $3)
+    `, [id, userId, note]);
+
+    res.json({ message: '✅ Game lent out' });
+  } catch (err) {
+    console.error('❌ Failed to lend out game:', err);
+    res.status(500).json({ error: 'Failed to lend out game' });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
