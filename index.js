@@ -387,6 +387,67 @@ app.get('/order-game/latest', async (req, res) => {
   }
 });
 
+app.delete('/order-game/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM game_orders WHERE id = $1', [id]);
+    res.json({ message: '✅ Order deleted' });
+  } catch (err) {
+    console.error('❌ Failed to delete order:', err);
+    res.status(500).json({ error: 'Failed to delete order' });
+  }
+});
+app.delete('/order-game', verifyToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM game_orders');
+    res.json({ message: '✅ All orders cleared' });
+  } catch (err) {
+    console.error('❌ Failed to clear orders:', err);
+    res.status(500).json({ error: 'Failed to clear orders' });
+  }
+});
+app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1. Fetch the order
+    const orderRes = await pool.query('SELECT * FROM game_orders WHERE id = $1', [id]);
+    const order = orderRes.rows[0];
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    // 2. Create a new user
+    const userRes = await pool.query(`
+    INSERT INTO users (first_name, last_name, phone)
+    VALUES ($1, $2, $3) RETURNING id
+    `, [order.first_name, order.last_name, order.phone]);
+    const userId = userRes.rows[0].id;
+
+    // 3. Mark game as lent out
+    await pool.query(`
+    UPDATE games
+    SET lent_out = true,
+    last_lent = NOW(),
+                     times_lent = COALESCE(times_lent, 0) + 1
+                     WHERE id = $1
+                     `, [order.game_id]);
+
+    // 4. Log in game_history
+    await pool.query(`
+    INSERT INTO game_history (game_id, user_id, action, note)
+    VALUES ($1, $2, 'lend', $3)
+    `, [order.game_id, userId, `Table ${order.table_id}`]);
+
+    // 5. Delete the order
+    await pool.query('DELETE FROM game_orders WHERE id = $1', [id]);
+
+    res.json({ message: '✅ Order completed and game lent' });
+  } catch (err) {
+    console.error('❌ Failed to complete order:', err);
+    res.status(500).json({ error: 'Failed to complete order' });
+  }
+});
+
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
