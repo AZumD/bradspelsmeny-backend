@@ -311,6 +311,31 @@ app.post('/return/:id', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/games/:id/current-lend', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+    SELECT gh.*, u.first_name, u.last_name
+    FROM game_history gh
+    LEFT JOIN users u ON gh.user_id = u.id
+    WHERE gh.game_id = $1 AND gh.action = 'lend'
+    ORDER BY gh.timestamp DESC
+    LIMIT 1
+    `, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No lending record found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to fetch current lend info:', err);
+    res.status(500).json({ error: 'Failed to fetch current lend info' });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
