@@ -288,6 +288,28 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
   }
 });
 
+app.post('/return/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await pool.query(`
+    UPDATE games
+    SET lent_out = false
+    WHERE id = $1
+    `, [id]);
+
+    await pool.query(`
+    INSERT INTO game_history (game_id, action)
+    VALUES ($1, 'return')
+    `, [id]);
+
+    res.json({ message: '✅ Game returned' });
+  } catch (err) {
+    console.error('❌ Failed to return game:', err);
+    res.status(500).json({ error: 'Failed to return game' });
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
