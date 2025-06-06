@@ -354,6 +354,38 @@ app.get('/stats/most-lent-this-month', verifyToken, async (req, res) => {
   }
 });
 
+app.post('/order-game', async (req, res) => {
+  const { game_id, game_title, table_id } = req.body;
+
+  if (!game_id || !table_id || !game_title) {
+    return res.status(400).json({ error: 'Missing data' });
+  }
+
+  try {
+    await pool.query(
+      'INSERT INTO game_orders (game_id, game_title, table_id) VALUES ($1, $2, $3)',
+                     [game_id, game_title, table_id]
+    );
+
+    res.status(200).json({ message: 'Game order placed' });
+  } catch (err) {
+    console.error('Error inserting order:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/order-game/latest', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM game_orders ORDER BY created_at DESC LIMIT 20'
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching orders:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
