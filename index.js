@@ -355,21 +355,22 @@ app.get('/stats/most-lent-this-month', verifyToken, async (req, res) => {
 });
 
 app.post('/order-game', async (req, res) => {
-  const { game_id, game_title, table_id } = req.body;
+  const { game_id, game_title, table_id, first_name, last_name, phone } = req.body;
 
-  if (!game_id || !table_id || !game_title) {
+  if (!game_id || !game_title || !table_id || !first_name || !last_name || !phone) {
     return res.status(400).json({ error: 'Missing data' });
   }
 
   try {
     await pool.query(
-      'INSERT INTO game_orders (game_id, game_title, table_id) VALUES ($1, $2, $3)',
-                     [game_id, game_title, table_id]
+      `INSERT INTO game_orders (game_id, game_title, table_id, first_name, last_name, phone)
+      VALUES ($1, $2, $3, $4, $5, $6)`,
+                     [game_id, game_title, table_id, first_name, last_name, phone]
     );
 
     res.status(200).json({ message: 'Game order placed' });
   } catch (err) {
-    console.error('Error inserting order:', err);
+    console.error('❌ Error inserting order:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
