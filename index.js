@@ -182,6 +182,11 @@ app.get('/users', verifyToken, async (req, res) => {
 
 app.post('/users', verifyToken, async (req, res) => {
   const { first_name, last_name, phone } = req.body;
+
+  if (!first_name || !last_name || !phone) {
+    return res.status(400).json({ error: 'Missing first name, last name or phone' });
+  }
+
   try {
     const result = await pool.query(
       `INSERT INTO users (first_name, last_name, phone) VALUES ($1, $2, $3) RETURNING *`,
@@ -193,6 +198,7 @@ app.post('/users', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to add user' });
   }
 });
+
 
 app.put('/users/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
