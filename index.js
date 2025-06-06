@@ -407,55 +407,6 @@ app.delete('/order-game', verifyToken, async (req, res) => {
   }
 });
 // COMPLETE ORDER: create user if not exists, then lend out game
-app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const orderRes = await pool.query('SELECT * FROM game_orders WHERE id = $1', [id]);
-    const order = orderRes.rows[0];
-    if (!order) return res.status(404).json({ error: "Order not found" });
-
-    // 1. Check if user already exists
-    const existingUserRes = await pool.query(
-      'SELECT * FROM users WHERE phone = $1',
-      [order.phone]
-    );
-    let userId;
-
-    if (existingUserRes.rows.length > 0) {
-      userId = existingUserRes.rows[0].id;
-    } else {
-      // 2. If not, create a new user
-      const newUserRes = await pool.query(
-        `INSERT INTO users (first_name, last_name, phone) VALUES ($1, $2, $3) RETURNING id`,
-                                          [order.first_name, order.last_name, order.phone]
-      );
-      userId = newUserRes.rows[0].id;
-    }
-
-    // 3. Lend out the game
-    await pool.query(`
-    UPDATE games
-    SET lent_out = true,
-    last_lent = NOW(),
-                     times_lent = COALESCE(times_lent, 0) + 1
-                     WHERE id = $1
-                     `, [order.game_id]);
-
-    await pool.query(`
-    INSERT INTO game_history (game_id, user_id, action, note)
-    VALUES ($1, $2, 'lend', $3)
-    `, [order.game_id, userId, `Auto-lend via order system (Table ${order.table_id})`]);
-
-    // 4. Delete the order after processing
-    await pool.query('DELETE FROM game_orders WHERE id = $1', [id]);
-
-    res.json({ message: '✅ Order completed' });
-  } catch (err) {
-    console.error("❌ Failed to complete order:", err);
-    res.status(500).json({ error: "Failed to complete order" });
-  }
-});
 
 app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
   const { id } = req.params;
@@ -464,10 +415,19 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
     // Fetch the order by id
     const orderRes = await pool.query('SELECT * FROM game_orders WHERE id = $1', [id]);
     const order = orderRes.rows[0];
-    if (!order) return res.status(404).json({ error: "Order not found" });
+    console.log('Processing order:', order);
 
+    if (!order) return res.status(404).json({ error: "Order not found" });
     // Standardize phone number by removing non-digits
-    const standardizedPhone = order.phone.replace(/\D/g, '');
+
+        const standardizedPhone = order.phone.replace(/\D/g, '');
+    // Add your validation here:
+    if (!order.first_name || !order.last_name || !standardizedPhone) {
+      return res.status(400).json({ error: 'Order missing user info' });
+    }
+
+
+
 
     // Check if user exists with that phone
     const existingUserRes = await pool.query(
