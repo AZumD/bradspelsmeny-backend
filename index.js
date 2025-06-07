@@ -56,23 +56,43 @@ app.post('/register', async (req, res) => {
   }
 
   try {
-    const existing = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
-    if (existing.rows.length > 0) return res.status(400).json({ error: 'Phone number already registered' });
+    const result = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
+    const existingUser = result.rows[0];
 
+    if (existingUser) {
+      if (existingUser.password) {
+        // User is already registered
+        return res.status(400).json({ error: 'Phone number already registered' });
+      } else {
+        // User exists as guest → promote to member
+        const hash = await bcrypt.hash(password, 10);
+        const update = await pool.query(
+          `UPDATE users SET password = $1 WHERE id = $2 RETURNING id, first_name, last_name, phone`,
+          [hash, existingUser.id]
+        );
+
+        const token = jwt.sign({ id: update.rows[0].id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
+        return res.status(200).json({ token, user: update.rows[0] });
+      }
+    }
+
+    // Create new member
     const hash = await bcrypt.hash(password, 10);
-    const result = await pool.query(`
+    const insert = await pool.query(`
     INSERT INTO users (first_name, last_name, phone, password)
     VALUES ($1, $2, $3, $4)
     RETURNING id, first_name, last_name, phone
     `, [first_name, last_name, phone, hash]);
 
-    const token = jwt.sign({ id: result.rows[0].id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
-    res.status(201).json({ token, user: result.rows[0] });
+    const token = jwt.sign({ id: insert.rows[0].id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
+    res.status(201).json({ token, user: insert.rows[0] });
+
   } catch (err) {
     console.error('❌ Failed to register user:', err);
     res.status(500).json({ error: 'Failed to register user' });
   }
 });
+
 
 // 🔑 User Login
 app.post('/login', async (req, res) => {
