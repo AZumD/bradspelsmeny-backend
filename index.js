@@ -11,7 +11,6 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
@@ -24,7 +23,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-const upload = multer(); // For handling multipart/form-data
+const upload = multer();
 
 app.use(cors({
   origin: 'https://azumd.github.io',
@@ -45,53 +44,55 @@ function verifyToken(req, res, next) {
   });
 }
 
-app.post('/admin/register', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
+app.get('/', (req, res) => {
+  res.send('🎲 Board Game Backend API is running.');
+});
+
+// 🧑‍💼 User Registration
+app.post('/register', async (req, res) => {
+  const { first_name, last_name, phone, password } = req.body;
+  if (!first_name || !last_name || !phone || !password) {
+    return res.status(400).json({ error: 'Missing fields' });
+  }
 
   try {
+    const existing = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
+    if (existing.rows.length > 0) return res.status(400).json({ error: 'Phone number already registered' });
+
     const hash = await bcrypt.hash(password, 10);
     const result = await pool.query(`
-    INSERT INTO admin_users (username, password)
-    VALUES ($1, $2)
-    RETURNING id, username
-    `, [username, hash]);
+    INSERT INTO users (first_name, last_name, phone, password)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id, first_name, last_name, phone
+    `, [first_name, last_name, phone, hash]);
 
-    res.status(201).json({ message: '✅ Admin created', user: result.rows[0] });
+    const token = jwt.sign({ id: result.rows[0].id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
+    res.status(201).json({ token, user: result.rows[0] });
   } catch (err) {
-    console.error('❌ Failed to register admin:', err);
-    res.status(500).json({ error: 'Failed to register admin' });
+    console.error('❌ Failed to register user:', err);
+    res.status(500).json({ error: 'Failed to register user' });
   }
 });
 
-app.post('/admin/login', async (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    console.log('🚫 Missing login fields');
-    return res.status(400).json({ error: 'Missing username or password' });
+// 🔑 User Login
+app.post('/login', async (req, res) => {
+  const { phone, password } = req.body;
+  if (!phone || !password) {
+    return res.status(400).json({ error: 'Missing phone or password' });
   }
 
   try {
-    const result = await pool.query('SELECT * FROM admin_users WHERE username = $1', [username]);
+    const result = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
     const user = result.rows[0];
-    if (!user) {
-      console.log('❌ No such user:', username);
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      console.log('❌ Password mismatch');
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '2h' });
-
-    console.log(`✅ Admin login: ${username}`);
-    res.json({ token });
+    const token = jwt.sign({ id: user.id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
+    res.json({ token, user: { id: user.id, first_name: user.first_name, last_name: user.last_name, phone: user.phone } });
   } catch (err) {
-    console.error('❌ Login failed:', err);
+    console.error('❌ User login failed:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -181,10 +182,12 @@ app.get('/users', verifyToken, async (req, res) => {
 });
 
 app.post('/users', verifyToken, async (req, res) => {
+  console.log("📦 Incoming /users body:", req.body); // 🔍 Log the actual data
+
   const { first_name, last_name, phone } = req.body;
 
   if (!first_name || !last_name || !phone) {
-    return res.status(400).json({ error: 'Missing first name, last name or phone' });
+    return res.status(400).json({ error: 'Missing user data' });
   }
 
   try {
@@ -198,6 +201,7 @@ app.post('/users', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to add user' });
   }
 });
+
 
 
 
@@ -488,7 +492,7 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
 
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server is running on port ${PORT}`);
 });
 
 module.exports = { verifyToken };
