@@ -44,9 +44,30 @@ function verifyToken(req, res, next) {
   });
 }
 
+function verifyAdmin(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Missing token' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err || user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    req.user = user;
+    next();
+  });
+}
+
 app.get('/', (req, res) => {
   res.send('🎲 Board Game Backend API is running.');
 });
+
+// ... [REMAINDER OF FILE UNCHANGED]
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
+});
+
+module.exports = { verifyToken };
+
 
 // 🧑‍💼 User Registration
 app.post('/register', async (req, res) => {
