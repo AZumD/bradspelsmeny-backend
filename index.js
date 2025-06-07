@@ -530,7 +530,28 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
   }
 });
 
+// 🛡️ Admin Login
+app.post('/admin/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Missing username or password' });
+  }
 
+  try {
+    const result = await pool.query('SELECT * FROM admins WHERE username = $1', [username]);
+    const admin = result.rows[0];
+    if (!admin) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const match = await bcrypt.compare(password, admin.password);
+    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const token = jwt.sign({ id: admin.id, role: 'admin' }, JWT_SECRET, { expiresIn: '2h' });
+    res.json({ token });
+  } catch (err) {
+    console.error('❌ Admin login failed:', err);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
