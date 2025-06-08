@@ -295,39 +295,37 @@ app.get('/users/:id', verifyToken, async (req, res) => {
   const requesterId = req.user.id;
   const isOwner = requesterId === parseInt(id);
   const isAdmin = req.user.role === 'admin';
+  let isFriend = false;
 
   try {
-    // Check if requester is friend of user (or owner/admin)
-    const friendCheck = await pool.query(
-      `SELECT 1 FROM friends
-      WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
-      LIMIT 1`,
-      [requesterId, id]
-    );
-    const isFriend = friendCheck.rows.length > 0;
-
     // Fetch user profile info
-    const result = await pool.query(
-      `SELECT
-      id, first_name, last_name, avatar_url, bio, membership_status, created_at, updated_at, email
-      FROM users WHERE id = $1`,
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
+    const result = await pool.query(...);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     let user = result.rows[0];
 
-    // If not owner/admin/friend, hide sensitive info
+    // Check friendship if not owner/admin
+    let isFriend = false;
+    if (!isOwner && !isAdmin) {
+      const friendCheck = await pool.query(
+        `SELECT 1 FROM friends
+        WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
+        LIMIT 1`,
+        [requesterId, id]
+      );
+      isFriend = friendCheck.rows.length > 0;
+    }
+
     if (!isOwner && !isAdmin && !isFriend) {
-      delete user.email;  // hide email
-      delete user.bio;    // hide bio
-      // Remove other private info as needed
+      delete user.email;
+      delete user.bio;
     }
 
     res.json(user);
+  } catch (err) {
+    console.error('❌ Failed to fetch user profile:', err);
+    res.status(500).json({ error: 'Failed to fetch user profile' });
+  }
+
 
   } catch (err) {
     console.error('❌ Failed to fetch user profile:', err);
