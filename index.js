@@ -334,7 +334,7 @@ app.get('/users/:id', verifyToken, async (req, res) => {
     // Fetch user profile info
     const result = await pool.query(
       `SELECT
-      id, first_name, last_name, avatar_url, bio, membership_status, created_at, updated_at, email
+      id, username, first_name, last_name, avatar_url, bio, membership_status, created_at, updated_at, email
       FROM users WHERE id = $1`,
       [id]
     );
@@ -385,19 +385,33 @@ app.put('/users/:id', verifyToken, async (req, res) => {
     // For membership_status, only admin can update it, else keep existing
     const membershipStatusToSet = (req.user.role === 'admin' && membership_status) ? membership_status : undefined;
 
+    const {
+      username,
+      first_name,
+      last_name,
+      phone,
+      email,
+      bio,
+      membership_status // Optional: Only allow admin to update this?
+    } = req.body;
+
+    // ...
+
     const result = await pool.query(
       `UPDATE users SET
-      first_name = COALESCE($1, first_name),
-                                    last_name = COALESCE($2, last_name),
-                                    phone = COALESCE($3, phone),
-                                    email = COALESCE($4, email),
-                                    bio = COALESCE($5, bio),
-                                    membership_status = COALESCE($6, membership_status),
+      username = COALESCE($1, username),
+                                    first_name = COALESCE($2, first_name),
+                                    last_name = COALESCE($3, last_name),
+                                    phone = COALESCE($4, phone),
+                                    email = COALESCE($5, email),
+                                    bio = COALESCE($6, bio),
+                                    membership_status = COALESCE($7, membership_status),
                                     updated_at = NOW()
-                                    WHERE id = $7
-                                    RETURNING id, first_name, last_name, phone, email, avatar_url, bio, membership_status, created_at, updated_at`,
+                                    WHERE id = $8
+                                    RETURNING id, username, first_name, last_name, phone, email, avatar_url, bio, membership_status, created_at, updated_at`,
                                     [
-                                      first_name || null,
+                                      username || null,
+                                    first_name || null,
                                     last_name || null,
                                     phone || null,
                                     email || null,
