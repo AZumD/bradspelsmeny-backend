@@ -761,9 +761,22 @@ app.delete('/friends/:friendId', verifyToken, async (req, res) => {
 // GET /users/:id/borrow-log — get borrowing history for a user
 app.get('/users/:id/borrow-log', verifyToken, async (req, res) => {
   const { id } = req.params;
+  const requesterId = req.user.id;
+  const isOwner = requesterId === parseInt(id);
+  const isAdmin = req.user.role === 'admin';
 
-  // Only allow user themselves or admin
-  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+  let isFriend = false;
+  if (!isOwner && !isAdmin) {
+    const friendCheck = await pool.query(
+      `SELECT 1 FROM friends
+      WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
+      LIMIT 1`,
+      [requesterId, id]
+    );
+    isFriend = friendCheck.rows.length > 0;
+  }
+
+  if (!isOwner && !isAdmin && !isFriend) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
@@ -790,6 +803,7 @@ app.get('/users/:id/borrow-log', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch borrow log' });
   }
 });
+
 
 
 
