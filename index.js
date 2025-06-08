@@ -702,6 +702,39 @@ app.delete('/friends/:friendId', verifyToken, async (req, res) => {
   }
 });
 
+// GET /users/:id/borrow-log — get borrowing history for a user
+app.get('/users/:id/borrow-log', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  // Only allow user themselves or admin
+  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    const result = await pool.query(`
+    SELECT
+    gh.id,
+    gh.game_id,
+    g.title_sv AS game_title,
+    gh.action,
+    gh.note,
+    gh.timestamp,
+    gh.returned_at
+    FROM game_history gh
+    JOIN games g ON gh.game_id = g.id
+    WHERE gh.user_id = $1
+    ORDER BY gh.timestamp DESC
+    LIMIT 50
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch borrow log:', err);
+    res.status(500).json({ error: 'Failed to fetch borrow log' });
+  }
+});
+
 
 // 🛡️ Admin Login2
 app.post('/admin/login', async (req, res) => {
