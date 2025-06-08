@@ -25,6 +25,11 @@ const pool = new Pool({
 
 const upload = multer();
 
+app.use(cors({
+  origin: 'https://azumd.github.io',
+  credentials: true
+}));
+
 app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads', 'avatars')));
 
 
@@ -72,10 +77,6 @@ app.post('/users/:id/avatar', verifyToken, upload.single('avatar'), async (req, 
 });
 
 
-app.use(cors({
-  origin: 'https://azumd.github.io',
-  credentials: true
-}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -298,13 +299,7 @@ app.get('/users/:id', verifyToken, async (req, res) => {
   let isFriend = false;
 
   try {
-    // Fetch user profile info
-    const result = await pool.query(...);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    let user = result.rows[0];
-
-    // Check friendship if not owner/admin
-    let isFriend = false;
+    // Check friendship only if not owner/admin
     if (!isOwner && !isAdmin) {
       const friendCheck = await pool.query(
         `SELECT 1 FROM friends
@@ -315,6 +310,21 @@ app.get('/users/:id', verifyToken, async (req, res) => {
       isFriend = friendCheck.rows.length > 0;
     }
 
+    // Fetch user profile info
+    const result = await pool.query(
+      `SELECT
+      id, first_name, last_name, avatar_url, bio, membership_status, created_at, updated_at, email
+      FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let user = result.rows[0];
+
+    // Hide sensitive info if not owner/admin/friend
     if (!isOwner && !isAdmin && !isFriend) {
       delete user.email;
       delete user.bio;
@@ -325,13 +335,8 @@ app.get('/users/:id', verifyToken, async (req, res) => {
     console.error('❌ Failed to fetch user profile:', err);
     res.status(500).json({ error: 'Failed to fetch user profile' });
   }
-
-
-  } catch (err) {
-    console.error('❌ Failed to fetch user profile:', err);
-    res.status(500).json({ error: 'Failed to fetch user profile' });
-  }
 });
+
 
 
 
