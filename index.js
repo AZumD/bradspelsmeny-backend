@@ -164,6 +164,9 @@ app.post('/register', async (req, res) => {
 
 
 // 🔑 User Login
+const refreshTokens = new Set(); // In-memory storage of valid refresh tokens. For production, store in DB.
+
+// Adjust your login endpoint to issue refresh token:
 app.post('/login', async (req, res) => {
   const { phone, password } = req.body;
   if (!phone || !password) {
@@ -178,23 +181,41 @@ app.post('/login', async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const token = jwt.sign({ id: user.id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
-    res.json({ token, user: { id: user.id, first_name: user.first_name, last_name: user.last_name, phone: user.phone } });
+    const accessToken = jwt.sign({ id: user.id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
+    const refreshToken = jwt.sign({ id: user.id, role: 'user' }, JWT_SECRET, { expiresIn: '7d' });
+    refreshTokens.add(refreshToken);
+
+    res.json({ token: accessToken, refreshToken, user: { id: user.id, first_name: user.first_name, last_name: user.last_name, phone: user.phone } });
   } catch (err) {
     console.error('❌ User login failed:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 });
 
-app.get('/games', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM games ORDER BY title_sv ASC');
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ Failed to fetch games:', err);
-    res.status(500).json({ error: 'Failed to fetch games' });
-  }
+// Add the refresh token endpoint
+app.post('/refresh-token', (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' });
+  if (!refreshTokens.has(refreshToken)) return res.status(403).json({ error: 'Invalid refresh token' });
+
+  jwt.verify(refreshToken, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid refresh token' });
+
+    // Issue new access token
+    const accessToken = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '2h' });
+    res.json({ token: accessToken });
+  });
 });
+
+// (Optional) Add a logout endpoint to revoke refresh tokens
+app.post('/logout', (req, res) => {
+  const { refreshToken } = req.body;
+  if (refreshToken) {
+    refreshTokens.delete(refreshToken);
+  }
+  res.json({ message: 'Logged out' });
+});
+
 
 app.post('/games', verifyToken, upload.none(), async (req, res) => {
   const {
