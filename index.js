@@ -518,6 +518,16 @@ app.get('/games/:id/current-lend', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/games', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM games ORDER BY title_sv ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch games:', err);
+    res.status(500).json({ error: 'Failed to fetch games' });
+  }
+});
+
 app.get('/stats/most-lent-this-month', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -782,6 +792,8 @@ app.get('/users/:id/borrow-log', verifyToken, async (req, res) => {
 });
 
 
+
+
 // 🛡️ Admin Login2
 app.post('/admin/login', async (req, res) => {
   const { username, password } = req.body;
@@ -804,6 +816,8 @@ app.post('/admin/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
+
+
 
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
