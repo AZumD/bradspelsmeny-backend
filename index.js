@@ -25,6 +25,53 @@ const pool = new Pool({
 
 const upload = multer();
 
+app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads', 'avatars')));
+
+
+app.post('/users/:id/avatar', verifyToken, upload.single('avatar'), async (req, res) => {
+  const { id } = req.params;
+
+  // Only owner or admin can upload avatar
+  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  try {
+    // Save file to a folder, e.g. ./uploads/avatars/, or use cloud storage
+    const avatarFolder = path.join(__dirname, 'uploads', 'avatars');
+    if (!fs.existsSync(avatarFolder)) {
+      fs.mkdirSync(avatarFolder, { recursive: true });
+    }
+
+    // Generate unique filename (e.g., userID + timestamp + extension)
+    const ext = path.extname(req.file.originalname);
+    const filename = `avatar_${id}_${Date.now()}${ext}`;
+    const filepath = path.join(avatarFolder, filename);
+
+    // Write file to disk
+    fs.writeFileSync(filepath, req.file.buffer);
+
+    // Construct URL (adjust base URL as needed)
+    const avatarUrl = `/uploads/avatars/${filename}`;
+
+    // Update DB with avatar URL
+    const result = await pool.query(
+      'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2 RETURNING avatar_url',
+                                    [avatarUrl, id]
+    );
+
+    res.json({ avatar_url: avatarUrl });
+  } catch (err) {
+    console.error('❌ Failed to upload avatar:', err);
+    res.status(500).json({ error: 'Failed to upload avatar' });
+  }
+});
+
+
 app.use(cors({
   origin: 'https://azumd.github.io',
   credentials: true
@@ -243,55 +290,90 @@ app.post('/users', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/users/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  // Allow user to get only their own profile or admin
+  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT id, first_name, last_name, phone, email, avatar_url, bio, membership_status, created_at, updated_at
+      FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to fetch user profile:', err);
+    res.status(500).json({ error: 'Failed to fetch user profile' });
+  }
+});
 
 
 
 app.put('/users/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
+
+  // Only owner or admin can update
+  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
   const {
     first_name,
     last_name,
     phone,
-    username,
-    password,
     email,
-    id_number
+    bio,
+    membership_status // Optional: Only allow admin to update this?
   } = req.body;
 
+  // Optional: Add validation for email format, membership_status values here
+
   try {
+    // For membership_status, only admin can update it, else keep existing
+    const membershipStatusToSet = (req.user.role === 'admin' && membership_status) ? membership_status : undefined;
+
     const result = await pool.query(
       `UPDATE users SET
       first_name = COALESCE($1, first_name),
                                     last_name = COALESCE($2, last_name),
                                     phone = COALESCE($3, phone),
-                                    username = COALESCE($4, username),
-                                    password = COALESCE($5, password),
-                                    email = COALESCE($6, email),
-                                    id_number = COALESCE($7, id_number)
-                                    WHERE id = $8
-                                    RETURNING *`,
+                                    email = COALESCE($4, email),
+                                    bio = COALESCE($5, bio),
+                                    membership_status = COALESCE($6, membership_status),
+                                    updated_at = NOW()
+                                    WHERE id = $7
+                                    RETURNING id, first_name, last_name, phone, email, avatar_url, bio, membership_status, created_at, updated_at`,
                                     [
                                       first_name || null,
                                     last_name || null,
                                     phone || null,
-                                    username || null,
-                                    password || null,
                                     email || null,
-                                    id_number || null,
+                                    bio || null,
+                                    membershipStatusToSet || null,
                                     id
                                     ]
     );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: "User not found" });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("❌ Failed to update user:", err);
-    res.status(500).json({ error: "Failed to update user" });
+    console.error('❌ Failed to update user profile:', err);
+    res.status(500).json({ error: 'Failed to update user profile' });
   }
 });
+
 
 
 
@@ -530,7 +612,98 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
   }
 });
 
-// 🛡️ Admin Login
+// Get friend list of logged-in user
+app.get('/friends', verifyToken, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const result = await pool.query(`
+    SELECT u.id, u.first_name, u.last_name, u.avatar_url
+    FROM friends f
+    JOIN users u ON f.friend_id = u.id
+    WHERE f.user_id = $1
+    ORDER BY u.first_name, u.last_name
+    `, [userId]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch friends:', err);
+    res.status(500).json({ error: 'Failed to fetch friends' });
+  }
+});
+
+// Add friend by user ID (simulate QR scan acceptance)
+app.post('/friends/:friendId', verifyToken, async (req, res) => {
+  const userId = req.user.id;
+  const friendId = parseInt(req.params.friendId);
+
+  if (userId === friendId) {
+    return res.status(400).json({ error: "You can't friend yourself" });
+  }
+
+  try {
+    // Check if friend user exists
+    const friendRes = await pool.query('SELECT id FROM users WHERE id = $1', [friendId]);
+    if (friendRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User to friend not found' });
+    }
+
+    // Check if friendship already exists
+    const existingRes = await pool.query(
+      'SELECT * FROM friends WHERE user_id = $1 AND friend_id = $2',
+      [userId, friendId]
+    );
+    if (existingRes.rows.length > 0) {
+      return res.status(400).json({ error: 'Already friends' });
+    }
+
+    // Insert friendship both ways (bidirectional)
+    await pool.query('BEGIN');
+    await pool.query(
+      'INSERT INTO friends (user_id, friend_id) VALUES ($1, $2)',
+                     [userId, friendId]
+    );
+    await pool.query(
+      'INSERT INTO friends (user_id, friend_id) VALUES ($1, $2)',
+                     [friendId, userId]
+    );
+    await pool.query('COMMIT');
+
+    res.json({ message: 'Friend added successfully' });
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    console.error('❌ Failed to add friend:', err);
+    res.status(500).json({ error: 'Failed to add friend' });
+  }
+});
+
+// Remove friend (delete both friendship rows)
+app.delete('/friends/:friendId', verifyToken, async (req, res) => {
+  const userId = req.user.id;
+  const friendId = parseInt(req.params.friendId);
+
+  try {
+    await pool.query('BEGIN');
+    await pool.query(
+      'DELETE FROM friends WHERE user_id = $1 AND friend_id = $2',
+      [userId, friendId]
+    );
+    await pool.query(
+      'DELETE FROM friends WHERE user_id = $1 AND friend_id = $2',
+      [friendId, userId]
+    );
+    await pool.query('COMMIT');
+
+    res.json({ message: 'Friend removed successfully' });
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    console.error('❌ Failed to remove friend:', err);
+    res.status(500).json({ error: 'Failed to remove friend' });
+  }
+});
+
+
+// 🛡️ Admin Login2
 app.post('/admin/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
