@@ -137,9 +137,11 @@ app.post('/register', async (req, res) => {
         // User exists as guest → promote to member
         const hash = await bcrypt.hash(password, 10);
         const update = await pool.query(
-          `UPDATE users SET username = $1, password = $2 WHERE id = $3 RETURNING id, username, first_name, last_name, phone`,
+          `UPDATE users SET username = $1, password = $2, membership_status = 'active'
+          WHERE id = $3 RETURNING id, username, first_name, last_name, phone, membership_status`,
           [username, hash, existingUser.id]
         );
+
 
         const token = jwt.sign({ id: update.rows[0].id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
         return res.status(200).json({ token, user: update.rows[0] });
@@ -149,9 +151,9 @@ app.post('/register', async (req, res) => {
     // Create new member
     const hash = await bcrypt.hash(password, 10);
     const insert = await pool.query(`
-    INSERT INTO users (username, first_name, last_name, phone, password)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING id, username, first_name, last_name, phone
+    INSERT INTO users (username, first_name, last_name, phone, password, membership_status)
+    VALUES ($1, $2, $3, $4, $5, 'active')
+    RETURNING id, username, first_name, last_name, phone, membership_status
     `, [username, first_name, last_name, phone, hash]);
 
     const token = jwt.sign({ id: insert.rows[0].id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
@@ -678,9 +680,11 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
     } else {
       // Create new user and get new ID
       const newUserRes = await pool.query(
-        `INSERT INTO users (first_name, last_name, phone) VALUES ($1, $2, $3) RETURNING id`,
+        `INSERT INTO users (first_name, last_name, phone, membership_status)
+        VALUES ($1, $2, $3, 'guest') RETURNING id`,
                                           [order.first_name, order.last_name, standardizedPhone]
       );
+
       userId = newUserRes.rows[0].id;
     }
 
