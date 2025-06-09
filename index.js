@@ -573,6 +573,22 @@ app.get('/games', verifyToken, async (req, res) => {
   }
 });
 
+// 📣 Public guest-accessible games endpoint
+app.get('/games/public', async (req, res) => {
+  try {
+    const result = await pool.query(`
+    SELECT * FROM games
+    WHERE members_only IS NOT TRUE
+    ORDER BY title_sv ASC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch public games:', err);
+    res.status(500).json({ error: 'Failed to fetch public games' });
+  }
+});
+
+
 app.get('/stats/most-lent-this-month', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(`
