@@ -847,6 +847,7 @@ app.get('/users/:id/borrow-log', verifyToken, async (req, res) => {
 
 
 // 🛡️ Admin Login2
+// In your /admin/login handler
 app.post('/admin/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
@@ -861,13 +862,43 @@ app.post('/admin/login', async (req, res) => {
     const match = await bcrypt.compare(password, admin.password);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const token = jwt.sign({ id: admin.id, role: 'admin' }, JWT_SECRET, { expiresIn: '2h' });
-    res.json({ token });
+    const accessToken = jwt.sign({ id: admin.id, role: 'admin' }, JWT_SECRET, { expiresIn: '2h' });
+    const refreshToken = jwt.sign({ id: admin.id, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Store refresh tokens in-memory (replace with DB for production)
+    refreshTokens.add(refreshToken);
+
+    res.json({ token: accessToken, refreshToken });
   } catch (err) {
     console.error('❌ Admin login failed:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 });
+
+app.post('/admin/logout', (req, res) => {
+  const { refreshToken } = req.body;
+  if (refreshToken) {
+    refreshTokens.delete(refreshToken);
+  }
+  res.json({ message: 'Logged out' });
+});
+
+
+
+app.post('/admin/refresh-token', (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' });
+  if (!refreshTokens.has(refreshToken)) return res.status(403).json({ error: 'Invalid refresh token' });
+
+  jwt.verify(refreshToken, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid refresh token' });
+
+    const accessToken = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '2h' });
+    res.json({ token: accessToken });
+  });
+});
+
+
 
 
 
