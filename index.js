@@ -256,6 +256,15 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
     slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
   } = req.body;
 
+  const parseBoolean = (val) => {
+    if (typeof val === 'boolean') return val;
+    if (typeof val === 'string') return val.toLowerCase() === 'true';
+    return false;
+  }
+
+  const slow_day_only_bool = parseBoolean(slow_day_only);
+  const trusted_only_bool = parseBoolean(trusted_only);
+
   try {
     const result = await pool.query(
       `UPDATE games SET
@@ -269,7 +278,7 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
         title_sv, title_en, description_sv, description_en,
         min_players, max_players, play_time,
         age, tags, img,
-        !!slow_day_only, !!trusted_only, condition_rating || null,
+        slow_day_only_bool, trusted_only_bool, condition_rating || null,
         staff_picks || null, min_table_size || null,
         id
       ]
@@ -280,6 +289,7 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
     res.status(500).json({ error: 'Failed to update game' });
   }
 });
+
 
 app.get('/users', verifyToken, async (req, res) => {
   try {
