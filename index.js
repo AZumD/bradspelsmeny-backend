@@ -821,6 +821,26 @@ app.delete('/friends/:friendId', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/users/:id/friends', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+    SELECT u.id, u.first_name, u.last_name, u.avatar_url
+    FROM friends f
+    JOIN users u ON f.friend_id = u.id
+    WHERE f.user_id = $1
+    ORDER BY u.first_name, u.last_name
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch user friends:', err);
+    res.status(500).json({ error: 'Failed to fetch user friends' });
+  }
+});
+
+
 // GET /users/:id/borrow-log — get borrowing history for a user
 app.get('/users/:id/borrow-log', verifyToken, async (req, res) => {
   const { id } = req.params;
