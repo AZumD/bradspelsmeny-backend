@@ -119,12 +119,13 @@ module.exports = { verifyToken };
 
 // 🧑‍💼 User Registration
 app.post('/register', async (req, res) => {
-  const { first_name, last_name, phone, password } = req.body;
-  if (!first_name || !last_name || !phone || !password) {
+  const { username, first_name, last_name, phone, password } = req.body;
+  if (!username || !first_name || !last_name || !phone || !password) {
     return res.status(400).json({ error: 'Missing fields' });
   }
 
   try {
+    // Check if user with phone already exists
     const result = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
     const existingUser = result.rows[0];
 
@@ -136,8 +137,8 @@ app.post('/register', async (req, res) => {
         // User exists as guest → promote to member
         const hash = await bcrypt.hash(password, 10);
         const update = await pool.query(
-          `UPDATE users SET password = $1 WHERE id = $2 RETURNING id, first_name, last_name, phone`,
-          [hash, existingUser.id]
+          `UPDATE users SET username = $1, password = $2 WHERE id = $3 RETURNING id, username, first_name, last_name, phone`,
+          [username, hash, existingUser.id]
         );
 
         const token = jwt.sign({ id: update.rows[0].id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
@@ -148,10 +149,10 @@ app.post('/register', async (req, res) => {
     // Create new member
     const hash = await bcrypt.hash(password, 10);
     const insert = await pool.query(`
-    INSERT INTO users (first_name, last_name, phone, password)
-    VALUES ($1, $2, $3, $4)
-    RETURNING id, first_name, last_name, phone
-    `, [first_name, last_name, phone, hash]);
+    INSERT INTO users (username, first_name, last_name, phone, password)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, username, first_name, last_name, phone
+    `, [username, first_name, last_name, phone, hash]);
 
     const token = jwt.sign({ id: insert.rows[0].id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
     res.status(201).json({ token, user: insert.rows[0] });
@@ -161,6 +162,7 @@ app.post('/register', async (req, res) => {
     res.status(500).json({ error: 'Failed to register user' });
   }
 });
+
 
 
 // 🔑 User Login
@@ -183,14 +185,26 @@ app.post('/login', async (req, res) => {
 
     const accessToken = jwt.sign({ id: user.id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
     const refreshToken = jwt.sign({ id: user.id, role: 'user' }, JWT_SECRET, { expiresIn: '7d' });
+
     refreshTokens.add(refreshToken);
 
-    res.json({ token: accessToken, refreshToken, user: { id: user.id, first_name: user.first_name, last_name: user.last_name, phone: user.phone } });
+    res.json({
+      token: accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        username: user.username,  // <-- Added username here
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone: user.phone
+      }
+    });
   } catch (err) {
     console.error('❌ User login failed:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 });
+
 
 // Add the refresh token endpoint
 app.post('/refresh-token', (req, res) => {
