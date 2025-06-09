@@ -245,13 +245,14 @@ app.post('/games', verifyToken, upload.none(), async (req, res) => {
         title_sv, title_en, description_sv, description_en,
         min_players, max_players, play_time,
         age, tags, img,
-        slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+        slow_day_only, trusted_only, members_only, condition_rating, staff_picks, min_table_size
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
                                     [
                                       title_sv, title_en, description_sv, description_en,
                                     min_players, max_players, play_time,
                                     age, tags, img,
-                                    !!slow_day_only, !!trusted_only, condition_rating || null, staff_picks || null, min_table_size || null
+                                    !!slow_day_only, !!trusted_only, !!members_only,
+                                    condition_rating || null, staff_picks || null, min_table_size || null
                                     ]
     );
     res.status(201).json(result.rows[0]);
@@ -267,8 +268,10 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
     title_sv, title_en, description_sv, description_en,
     min_players, max_players, play_time,
     age, tags, img,
-    slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
+    slow_day_only, trusted_only, members_only,
+    condition_rating, staff_picks, min_table_size
   } = req.body;
+
 
   const parseBoolean = (val) => {
     if (typeof val === 'boolean') return val;
@@ -278,6 +281,8 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
 
   const slow_day_only_bool = parseBoolean(slow_day_only);
   const trusted_only_bool = parseBoolean(trusted_only);
+  const members_only_bool = parseBoolean(members_only);
+
 
   try {
     const result = await pool.query(
@@ -285,16 +290,15 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
       title_sv=$1, title_en=$2, description_sv=$3, description_en=$4,
       min_players=$5, max_players=$6, play_time=$7,
       age=$8, tags=$9, img=$10,
-      slow_day_only=$11, trusted_only=$12, condition_rating=$13,
-      staff_picks=$14, min_table_size=$15
-      WHERE id=$16 RETURNING *`,
+      slow_day_only=$11, trusted_only=$12, members_only=$13, condition_rating=$14,
+      staff_picks=$15, min_table_size=$16
+      WHERE id=$17 RETURNING *`,
       [
         title_sv, title_en, description_sv, description_en,
         min_players, max_players, play_time,
         age, tags, img,
-        slow_day_only_bool, trusted_only_bool, condition_rating || null,
-        staff_picks || null, min_table_size || null,
-        id
+        slow_day_only_bool, trusted_only_bool, members_only_bool, condition_rating || null,
+        staff_picks || null, min_table_size || null, id
       ]
     );
     res.json(result.rows[0]);
