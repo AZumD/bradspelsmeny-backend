@@ -193,10 +193,11 @@ app.post('/login', async (req, res) => {
       refreshToken,
       user: {
         id: user.id,
-        username: user.username,  // <-- Added username here
+        username: user.username,
         first_name: user.first_name,
         last_name: user.last_name,
-        phone: user.phone
+        phone: user.phone,
+        membership_status: user.membership_status  // 🛠️ Add this
       }
     });
   } catch (err) {
