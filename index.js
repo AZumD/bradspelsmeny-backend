@@ -772,7 +772,7 @@ app.post('/friends/:id', verifyToken, async (req, res) => {
     // 🧠 Check if there's an existing *pending* friend request
     const existingRequest = await pool.query(`
     SELECT 1 FROM friend_requests
-    WHERE sender_id = $1 AND receiver_id = $2 AND accepted = FALSE
+    WHERE sender_id = $1 AND reciever_id = $2 AND accepted = FALSE
     `, [senderId, receiverId]);
 
     if (existingRequest.rowCount > 0) {
@@ -781,7 +781,7 @@ app.post('/friends/:id', verifyToken, async (req, res) => {
 
     // ✅ Insert the friend request
     const { rows } = await pool.query(`
-    INSERT INTO friend_requests (sender_id, receiver_id)
+    INSERT INTO friend_requests (sender_id, reciever_id)
     VALUES ($1, $2)
     RETURNING id
     `, [senderId, receiverId]);
@@ -953,7 +953,7 @@ app.post('/friends/:receiverId', verifyToken, async (req, res) => {
 
   try {
     await pool.query(`
-    INSERT INTO friend_requests (sender_id, receiver_id, accepted)
+    INSERT INTO friend_requests (sender_id, reciever_id, accepted)
     VALUES ($1, $2, FALSE)
     ON CONFLICT DO NOTHING
     `, [senderId, receiverId]);
@@ -977,7 +977,7 @@ app.get('/friend-requests', verifyToken, async (req, res) => {
     SELECT fr.id, fr.sender_id, u.username, u.avatar_url
     FROM friend_requests fr
     JOIN users u ON u.id = fr.sender_id
-    WHERE fr.receiver_id = $1 AND fr.accepted = FALSE
+    WHERE fr.reciever_id = $1 AND fr.accepted = FALSE
     `, [req.user.id]);
 
     res.json(rows);
@@ -997,7 +997,7 @@ app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
     const { rows } = await pool.query(`
     UPDATE friend_requests
     SET accepted = TRUE
-    WHERE id = $1 AND receiver_id = $2
+    WHERE id = $1 AND reciever_id = $2
     RETURNING sender_id
     `, [requestId, receiverId]);
 
@@ -1029,7 +1029,7 @@ app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
     INSERT INTO notifications (user_id, type, data)
     VALUES ($1, 'friend_accept', $2)
     `, [senderId, JSON.stringify({
-      receiver_id: req.user.id,
+      reciever_id: req.user.id,
       username: receiver.username,
       avatar_url: receiver.avatar_url
     })]);
