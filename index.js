@@ -918,6 +918,18 @@ app.post('/notifications/:id/read', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to mark as read' });
   }
 });
+// In your Express backend (for dev only)
+app.post('/notifications/test', verifyToken, async (req, res) => {
+  const userId = req.user.id;
+
+  const result = await pool.query(`
+  INSERT INTO notifications (user_id, type, data, created_at, read)
+  VALUES ($1, 'friend_request', $2, NOW(), false)
+  RETURNING *;
+  `, [userId, JSON.stringify({ sender_id: 999 })]);
+
+  res.json(result.rows[0]);
+});
 
 
 
