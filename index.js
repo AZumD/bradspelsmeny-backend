@@ -1023,8 +1023,84 @@ app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
 });
 
 
+// ❤️ FAVORITES
+app.post('/favorite', verifyToken, async (req, res) => {
+  const { user_id, game_id } = req.body;
+  await pool.query(
+    `INSERT INTO favorites (user_id, game_id)
+    VALUES ($1, $2)
+    ON CONFLICT (user_id, game_id) DO NOTHING`,
+                   [user_id, game_id]
+  );
+  res.json({ success: true });
+});
+
+app.delete('/favorite', verifyToken, async (req, res) => {
+  const { user_id, game_id } = req.body;
+  await pool.query(
+    `DELETE FROM favorites WHERE user_id = $1 AND game_id = $2`,
+    [user_id, game_id]
+  );
+  res.json({ success: true });
+});
 
 
+// 🎯 WISHLIST (corrected table name!)
+app.post('/wishlist', verifyToken, async (req, res) => {
+  const { user_id, game_id } = req.body;
+  await pool.query(
+    `INSERT INTO wishlist (user_id, game_id)
+    VALUES ($1, $2)
+    ON CONFLICT (user_id, game_id) DO NOTHING`,
+                   [user_id, game_id]
+  );
+  res.json({ success: true });
+});
+
+app.delete('/wishlist', verifyToken, async (req, res) => {
+  const { user_id, game_id } = req.body;
+  await pool.query(
+    `DELETE FROM wishlist WHERE user_id = $1 AND game_id = $2`,
+    [user_id, game_id]
+  );
+  res.json({ success: true });
+});
+
+
+app.get('/users/:id/favorites', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  // Only the user or an admin can view this
+  if (req.user.id !== parseInt(id)) {
+    return res.status(403).json({ error: 'Unauthorized access' });
+  }
+
+  const result = await pool.query(`
+  SELECT g.*
+  FROM favorites f
+  JOIN games g ON f.game_id = g.id
+  WHERE f.user_id = $1
+  `, [id]);
+
+  res.json(result.rows);
+});
+
+app.get('/users/:id/wishlist', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  if (req.user.id !== parseInt(id)) {
+    return res.status(403).json({ error: 'Unauthorized access' });
+  }
+
+  const result = await pool.query(`
+  SELECT g.*
+  FROM wishlist w
+  JOIN games g ON w.game_id = g.id
+  WHERE w.user_id = $1
+  `, [id]);
+
+  res.json(result.rows);
+});
 
 
 // 🛡️ Admin Login2
