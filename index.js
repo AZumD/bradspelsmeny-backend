@@ -754,29 +754,42 @@ app.post('/friends/:id', verifyToken, async (req, res) => {
   const receiverId = parseInt(req.params.id);
 
   if (senderId === receiverId) {
-    return res.status(400).json({ error: "You can't friend yourself." });
+    return res.status(400).json({ error: 'Cannot friend yourself' });
   }
 
   try {
-    // Insert into friend_requests table
-    await pool.query(`
-    INSERT INTO friend_requests (sender_id, receiver_id)
-    VALUES ($1, $2)
-    ON CONFLICT DO NOTHING
+    // Check if request already exists
+    const existing = await pool.query(`
+    SELECT id FROM friend_requests
+    WHERE sender_id = $1 AND receiver_id = $2 AND accepted = FALSE
     `, [senderId, receiverId]);
 
-    // Notify the receiver
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Request already sent' });
+    }
+
+    // Insert new friend request
+    const { rows } = await pool.query(`
+    INSERT INTO friend_requests (sender_id, receiver_id)
+    VALUES ($1, $2)
+    RETURNING id
+    `, [senderId, receiverId]);
+
+    const requestId = rows[0].id;
+
+    // Create notification for the receiver
     await pool.query(`
     INSERT INTO notifications (user_id, type, data)
     VALUES ($1, 'friend_request', $2)
-    `, [receiverId, { sender_id: senderId }]);
+    `, [receiverId, JSON.stringify({ sender_id: senderId, request_id: requestId })]);
 
-    res.status(200).json({ message: 'Friend request sent.' });
+    res.status(200).json({ message: 'Friend request sent' });
   } catch (err) {
-    console.error('❌ Error sending friend request:', err);
-    res.status(500).json({ error: 'Failed to send friend request.' });
+    console.error('❌ Error creating friend request:', err);
+    res.status(500).json({ error: 'Failed to send request' });
   }
 });
+
 
 
 // Remove friend (delete both friendship rows)
