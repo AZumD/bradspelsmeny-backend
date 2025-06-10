@@ -931,6 +931,88 @@ app.post('/notifications/test', verifyToken, async (req, res) => {
   res.json(result.rows[0]);
 });
 
+app.post('/friends/:receiverId', verifyToken, async (req, res) => {
+  const senderId = req.user.id;
+  const receiverId = parseInt(req.params.receiverId);
+
+  if (senderId === receiverId) {
+    return res.status(400).json({ error: "Can't friend yourself" });
+  }
+
+  try {
+    await pool.query(`
+    INSERT INTO friend_requests (sender_id, receiver_id, accepted)
+    VALUES ($1, $2, FALSE)
+    ON CONFLICT DO NOTHING
+    `, [senderId, receiverId]);
+
+    await pool.query(`
+    INSERT INTO notifications (user_id, type, data)
+    VALUES ($1, 'friend_request', $2)
+    `, [receiverId, JSON.stringify({ sender_id: senderId })]);
+
+    res.status(200).json({ message: 'Friend request sent.' });
+  } catch (err) {
+    console.error('❌ Friend request error:', err);
+    res.status(500).json({ error: 'Failed to send friend request.' });
+  }
+});
+
+
+app.get('/friend-requests', verifyToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+    SELECT fr.id, fr.sender_id, u.username, u.avatar_url
+    FROM friend_requests fr
+    JOIN users u ON u.id = fr.sender_id
+    WHERE fr.receiver_id = $1 AND fr.accepted = FALSE
+    `, [req.user.id]);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch friend requests:', err);
+    res.status(500).json({ error: 'Could not fetch friend requests' });
+  }
+});
+
+app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
+  const requestId = parseInt(req.params.id);
+
+  try {
+    // Mark the request as accepted
+    const { rows } = await pool.query(`
+    UPDATE friend_requests
+    SET accepted = TRUE
+    WHERE id = $1 AND receiver_id = $2
+    RETURNING sender_id
+    `, [requestId, req.user.id]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Request not found or unauthorized' });
+    }
+
+    const senderId = rows[0].sender_id;
+
+    // Create mutual friendship
+    await pool.query(`
+    INSERT INTO friends (user_id, friend_id)
+    VALUES ($1, $2), ($2, $1)
+    ON CONFLICT DO NOTHING
+    `, [req.user.id, senderId]);
+
+    // Notify the sender
+    await pool.query(`
+    INSERT INTO notifications (user_id, type, data)
+    VALUES ($1, 'friend_accept', $2)
+    `, [senderId, JSON.stringify({ receiver_id: req.user.id })]);
+
+    res.status(200).json({ message: 'Friend request accepted.' });
+  } catch (err) {
+    console.error('❌ Accept failed:', err);
+    res.status(500).json({ error: 'Failed to accept request' });
+  }
+});
+
 
 
 
