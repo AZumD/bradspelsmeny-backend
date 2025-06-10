@@ -1090,10 +1090,10 @@ app.delete('/wishlist', verifyToken, async (req, res) => {
 app.get('/users/:id/favorites', verifyToken, async (req, res) => {
   const { id } = req.params;
 
-  // Only the user or an admin can view this
-  if (req.user.id !== parseInt(id)) {
-    return res.status(403).json({ error: 'Unauthorized access' });
-  }
+  // Allow access to anyone's public favorites/wishlist
+  const favorites = await db.getFavoritesForUser(requestedUserId);
+  return res.json(favorites);
+
 
   const result = await pool.query(`
   SELECT g.*
