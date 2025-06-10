@@ -900,6 +900,24 @@ app.get('/notifications', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch notifications' });
   }
 });
+app.post('/notifications/:id/read', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+    UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2 RETURNING *
+    `, [id, req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    res.json({ message: 'Marked as read' });
+  } catch (err) {
+    console.error('❌ Failed to mark notification as read:', err);
+    res.status(500).json({ error: 'Failed to mark as read' });
+  }
+});
 
 
 
