@@ -989,18 +989,23 @@ app.get('/friend-requests', verifyToken, async (req, res) => {
 
 app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
   const requestId = parseInt(req.params.id);
+  const myUserId = parseInt(req.user.id);
+
+  console.log(`🔍 Accepting request ID: ${requestId} as receiver ID: ${myUserId}`);
 
   try {
-    // Accept the friend request and get the sender_id
-    const receiverId = parseInt(req.user.id);
+    // Debug check
+    const check = await pool.query(`
+    SELECT * FROM friend_requests WHERE id = $1
+    `, [requestId]);
+    console.log('📦 DB result for request ID:', check.rows);
 
     const { rows } = await pool.query(`
     UPDATE friend_requests
     SET accepted = TRUE
     WHERE id = $1 AND receiver_id = $2
     RETURNING sender_id
-    `, [requestId, receiverId]);
-
+    `, [requestId, myUserId]);
 
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Request not found or unauthorized' });
@@ -1008,28 +1013,23 @@ app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
 
     const senderId = rows[0].sender_id;
 
-    // Create mutual friendship
     await pool.query(`
     INSERT INTO friends (user_id, friend_id)
     VALUES ($1, $2), ($2, $1)
     ON CONFLICT DO NOTHING
-    `, [req.user.id, senderId]);
+    `, [myUserId, senderId]);
 
-    // Get receiver's username and avatar_url
     const receiverInfo = await pool.query(`
-    SELECT username, avatar_url
-    FROM users
-    WHERE id = $1
-    `, [req.user.id]);
+    SELECT username, avatar_url FROM users WHERE id = $1
+    `, [myUserId]);
 
     const receiver = receiverInfo.rows[0] || {};
 
-    // Notify the sender that their request was accepted
     await pool.query(`
     INSERT INTO notifications (user_id, type, data)
     VALUES ($1, 'friend_accept', $2)
     `, [senderId, JSON.stringify({
-      receiver_id: req.user.id,
+      receiver_id: myUserId,
       username: receiver.username,
       avatar_url: receiver.avatar_url
     })]);
@@ -1040,6 +1040,7 @@ app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to accept request' });
   }
 });
+
 
 
 // ❤️ FAVORITES
