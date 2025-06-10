@@ -749,51 +749,35 @@ app.get('/friends', verifyToken, async (req, res) => {
 });
 
 // Add friend by user ID (simulate QR scan acceptance)
-app.post('/friends/:friendId', verifyToken, async (req, res) => {
-  const userId = req.user.id;
-  const friendId = parseInt(req.params.friendId);
+app.post('/friends/:id', verifyToken, async (req, res) => {
+  const senderId = req.user.id;
+  const receiverId = parseInt(req.params.id);
 
-  if (userId === friendId) {
-    return res.status(400).json({ error: "You can't friend yourself" });
+  if (senderId === receiverId) {
+    return res.status(400).json({ error: "You can't friend yourself." });
   }
 
   try {
-    // Check if friend user exists
-    const friendRes = await pool.query('SELECT id FROM users WHERE id = $1', [friendId]);
-    if (friendRes.rows.length === 0) {
-      return res.status(404).json({ error: 'User to friend not found' });
-    }
+    // Insert into friend_requests table
+    await pool.query(`
+    INSERT INTO friend_requests (sender_id, receiver_id)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+    `, [senderId, receiverId]);
 
-    // Check if friendship already exists
-    const existingRes = await pool.query(
-      `SELECT 1 FROM friends WHERE
-      (user_id = $1 AND friend_id = $2) OR
-      (user_id = $2 AND friend_id = $1)`,
-                                         [userId, friendId]
-    );
-    if (existingRes.rows.length > 0) {
-      return res.status(400).json({ error: 'Already friends' });
-    }
+    // Notify the receiver
+    await pool.query(`
+    INSERT INTO notifications (user_id, type, data)
+    VALUES ($1, 'friend_request', $2)
+    `, [receiverId, { sender_id: senderId }]);
 
-    // Insert friendship both ways (bidirectional)
-    await pool.query('BEGIN');
-    await pool.query(
-      'INSERT INTO friends (user_id, friend_id) VALUES ($1, $2)',
-                     [userId, friendId]
-    );
-    await pool.query(
-      'INSERT INTO friends (user_id, friend_id) VALUES ($1, $2)',
-                     [friendId, userId]
-    );
-    await pool.query('COMMIT');
-
-    res.json({ message: 'Friend added successfully' });
+    res.status(200).json({ message: 'Friend request sent.' });
   } catch (err) {
-    await pool.query('ROLLBACK');
-    console.error('❌ Failed to add friend:', err);
-    res.status(500).json({ error: 'Failed to add friend' });
+    console.error('❌ Error sending friend request:', err);
+    res.status(500).json({ error: 'Failed to send friend request.' });
   }
 });
+
 
 // Remove friend (delete both friendship rows)
 app.delete('/friends/:friendId', verifyToken, async (req, res) => {
