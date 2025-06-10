@@ -641,25 +641,24 @@ app.get('/order-game/latest', async (req, res) => {
   }
 });
 
-app.delete('/order-game/:id', verifyToken, async (req, res) => {
-  const { id } = req.params;
+app.delete('/friends/remove/:id', verifyToken, async (req, res) => {
+  const myId = req.user.id;
+  const friendId = parseInt(req.params.id);
+
   try {
-    await pool.query('DELETE FROM game_orders WHERE id = $1', [id]);
-    res.json({ message: '✅ Order deleted' });
+    await pool.query(`
+    DELETE FROM friends
+    WHERE (user_id = $1 AND friend_id = $2)
+    OR (user_id = $2 AND friend_id = $1)
+    `, [myId, friendId]);
+
+    res.status(200).json({ message: 'Friend removed' }); // ✅ Proper response
   } catch (err) {
-    console.error('❌ Failed to delete order:', err);
-    res.status(500).json({ error: 'Failed to delete order' });
+    console.error('❌ Error removing friend:', err);
+    res.status(500).json({ error: 'Failed to remove friend' });
   }
 });
-app.delete('/order-game', verifyToken, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM game_orders');
-    res.json({ message: '✅ All orders cleared' });
-  } catch (err) {
-    console.error('❌ Failed to clear orders:', err);
-    res.status(500).json({ error: 'Failed to clear orders' });
-  }
-});
+
 // COMPLETE ORDER: create user if not exists, then lend out game
 
 app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
