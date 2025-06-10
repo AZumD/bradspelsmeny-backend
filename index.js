@@ -979,7 +979,7 @@ app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
   const requestId = parseInt(req.params.id);
 
   try {
-    // Mark the request as accepted
+    // Accept the friend request and get the sender_id
     const { rows } = await pool.query(`
     UPDATE friend_requests
     SET accepted = TRUE
@@ -1000,11 +1000,24 @@ app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
     ON CONFLICT DO NOTHING
     `, [req.user.id, senderId]);
 
-    // Notify the sender
+    // Get receiver's username and avatar_url
+    const receiverInfo = await pool.query(`
+    SELECT username, avatar_url
+    FROM users
+    WHERE id = $1
+    `, [req.user.id]);
+
+    const receiver = receiverInfo.rows[0] || {};
+
+    // Notify the sender that their request was accepted
     await pool.query(`
     INSERT INTO notifications (user_id, type, data)
     VALUES ($1, 'friend_accept', $2)
-    `, [senderId, JSON.stringify({ receiver_id: req.user.id })]);
+    `, [senderId, JSON.stringify({
+      receiver_id: req.user.id,
+      username: receiver.username,
+      avatar_url: receiver.avatar_url
+    })]);
 
     res.status(200).json({ message: 'Friend request accepted.' });
   } catch (err) {
@@ -1012,6 +1025,7 @@ app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to accept request' });
   }
 });
+
 
 
 
