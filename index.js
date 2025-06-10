@@ -754,21 +754,32 @@ app.post('/friends/:id', verifyToken, async (req, res) => {
   const receiverId = parseInt(req.params.id);
 
   if (senderId === receiverId) {
-    return res.status(400).json({ error: 'Cannot friend yourself' });
+    return res.status(400).json({ error: "Can't friend yourself." });
   }
 
   try {
-    // Check if request already exists
-    const existing = await pool.query(`
-    SELECT id FROM friend_requests
+    // 🧠 Check if you're already friends
+    const existingFriend = await pool.query(`
+    SELECT 1 FROM friends
+    WHERE (user_id = $1 AND friend_id = $2)
+    OR (user_id = $2 AND friend_id = $1)
+    `, [senderId, receiverId]);
+
+    if (existingFriend.rowCount > 0) {
+      return res.status(400).json({ error: "Already friends." });
+    }
+
+    // 🧠 Check if there's an existing *pending* friend request
+    const existingRequest = await pool.query(`
+    SELECT 1 FROM friend_requests
     WHERE sender_id = $1 AND receiver_id = $2 AND accepted = FALSE
     `, [senderId, receiverId]);
 
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'Request already sent' });
+    if (existingRequest.rowCount > 0) {
+      return res.status(400).json({ error: "Friend request already sent." });
     }
 
-    // Insert new friend request
+    // ✅ Insert the friend request
     const { rows } = await pool.query(`
     INSERT INTO friend_requests (sender_id, receiver_id)
     VALUES ($1, $2)
@@ -777,18 +788,23 @@ app.post('/friends/:id', verifyToken, async (req, res) => {
 
     const requestId = rows[0].id;
 
-    // Create notification for the receiver
+    // 🔔 Add notification for the receiver
     await pool.query(`
     INSERT INTO notifications (user_id, type, data)
     VALUES ($1, 'friend_request', $2)
-    `, [receiverId, JSON.stringify({ sender_id: senderId, request_id: requestId })]);
+    `, [receiverId, JSON.stringify({
+      sender_id: senderId,
+      request_id: requestId
+    })]);
 
-    res.status(200).json({ message: 'Friend request sent' });
+    res.status(201).json({ message: 'Friend request sent.' });
+
   } catch (err) {
-    console.error('❌ Error creating friend request:', err);
-    res.status(500).json({ error: 'Failed to send request' });
+    console.error("❌ Error sending friend request:", err);
+    res.status(500).json({ error: "Something went wrong." });
   }
 });
+
 
 
 
