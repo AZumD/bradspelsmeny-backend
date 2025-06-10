@@ -992,12 +992,15 @@ app.post('/friend-requests/:id/accept', verifyToken, async (req, res) => {
 
   try {
     // Accept the friend request and get the sender_id
+    const receiverId = parseInt(req.user.id);
+
     const { rows } = await pool.query(`
     UPDATE friend_requests
     SET accepted = TRUE
     WHERE id = $1 AND receiver_id = $2
     RETURNING sender_id
-    `, [requestId, req.user.id]);
+    `, [requestId, receiverId]);
+
 
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Request not found or unauthorized' });
