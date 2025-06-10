@@ -886,6 +886,20 @@ app.get('/users/:id/borrow-log', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch borrow log' });
   }
 });
+app.get('/notifications', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+    SELECT * FROM notifications
+    WHERE user_id = $1
+    ORDER BY created_at DESC
+    `, [req.user.id]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch notifications:', err);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
 
 
 
