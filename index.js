@@ -1087,39 +1087,44 @@ app.delete('/wishlist', verifyToken, async (req, res) => {
 });
 
 
-app.get('/users/:id/favorites', verifyToken, async (req, res) => {
-  const { id } = req.params;
+// FAVORITES - NU OFFENTLIG
+// Inga 'verifyToken' eller interna if-satser behövs
+app.get('/users/:id/favorites', async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  // Only the user or an admin can view this
-  if (req.user.id !== parseInt(id)) {
-    return res.status(403).json({ error: 'Unauthorized access' });
+    const result = await pool.query(`
+    SELECT g.*
+    FROM favorites f
+    JOIN games g ON f.game_id = g.id
+    WHERE f.user_id = $1
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching favorites:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  const result = await pool.query(`
-  SELECT g.*
-  FROM favorites f
-  JOIN games g ON f.game_id = g.id
-  WHERE f.user_id = $1
-  `, [id]);
-
-  res.json(result.rows);
 });
 
-app.get('/users/:id/wishlist', verifyToken, async (req, res) => {
-  const { id } = req.params;
+// WISHLIST - NU OFFENTLIG
+// Inga 'verifyToken' eller interna if-satser behövs
+app.get('/users/:id/wishlist', async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  if (req.user.id !== parseInt(id)) {
-    return res.status(403).json({ error: 'Unauthorized access' });
+    const result = await pool.query(`
+    SELECT g.*
+    FROM wishlist w
+    JOIN games g ON w.game_id = g.id
+    WHERE w.user_id = $1
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching wishlist:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  const result = await pool.query(`
-  SELECT g.*
-  FROM wishlist w
-  JOIN games g ON w.game_id = g.id
-  WHERE w.user_id = $1
-  `, [id]);
-
-  res.json(result.rows);
 });
 
 
