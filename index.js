@@ -495,6 +495,7 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
   }
 
   try {
+    // 1. Lend the game
     await pool.query(`
     UPDATE games
     SET lent_out = true,
@@ -503,10 +504,53 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
                      WHERE id = $1
                      `, [id]);
 
+    // 2. Insert into history
     await pool.query(`
     INSERT INTO game_history (game_id, user_id, action, note)
     VALUES ($1, $2, 'lend', $3)
     `, [id, userId, note]);
+
+    // 3. Check if first borrow
+    const borrowCountRes = await pool.query(`
+    SELECT COUNT(*) FROM game_history WHERE user_id = $1 AND action = 'lend'
+    `, [userId]);
+
+    const borrowCount = parseInt(borrowCountRes.rows[0].count);
+
+    if (borrowCount === 1) {
+      // Look up the badge by name
+      const badgeRes = await pool.query(`
+      SELECT id, name, icon_url FROM badges WHERE name = 'First Borrow' LIMIT 1
+      `);
+      const badge = badgeRes.rows[0];
+
+      if (badge) {
+        const existing = await pool.query(`
+        SELECT 1 FROM user_badges WHERE user_id = $1 AND badge_id = $2
+        `, [userId, badge.id]);
+
+        if (existing.rows.length === 0) {
+          // Award it
+          await pool.query(`
+          INSERT INTO user_badges (user_id, badge_id)
+          VALUES ($1, $2)
+          `, [userId, badge.id]);
+
+          // Add notification with badge info
+          await pool.query(`
+          INSERT INTO notifications (user_id, type, data)
+          VALUES ($1, 'badge_awarded', $2)
+          `, [
+            userId,
+            JSON.stringify({
+              badge_id: badge.id,
+              name: badge.name,
+              icon_url: badge.icon_url
+            })
+          ]);
+        }
+      }
+    }
 
     res.json({ message: '✅ Game lent out' });
   } catch (err) {
@@ -514,6 +558,8 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to lend out game' });
   }
 });
+
+
 
 app.post('/return/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
