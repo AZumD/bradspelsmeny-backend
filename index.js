@@ -1164,24 +1164,30 @@ app.post('/users/:id/badges', verifyAdmin, async (req, res) => {
   const { badge_id } = req.body;
 
   try {
-    const exists = await pool.query(`
-    SELECT 1 FROM user_badges WHERE user_id = $1 AND badge_id = $2
+    const result = await pool.query(`
+    INSERT INTO user_badges (user_id, badge_id)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+    RETURNING *
     `, [userId, badge_id]);
 
-    if (exists.rows.length > 0) {
-      return res.status(409).json({ error: 'Badge already awarded' });
+    if (result.rowCount === 0) {
+      return res.status(200).json({
+        success: false,
+        message: 'User already has this badge'
+      });
     }
 
-    await pool.query(`
-    INSERT INTO user_badges (user_id, badge_id) VALUES ($1, $2)
-    `, [userId, badge_id]);
-
-    res.status(201).json({ success: true });
+    res.status(201).json({
+      success: true,
+      message: 'Badge awarded'
+    });
   } catch (err) {
     console.error('❌ Failed to award badge:', err);
     res.status(500).json({ error: 'Failed to award badge' });
   }
 });
+
 
 app.post('/debug/award-founder', async (req, res) => {
   try {
