@@ -1128,8 +1128,77 @@ app.get('/users/:id/wishlist', async (req, res) => {
 });
 
 
-// 🛡️ Admin Login2
-// In your /admin/login handler
+//BADGES -------------------------------------------------------------------------------------
+app.get('/badges', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM badges ORDER BY id');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch badges:', err);
+    res.status(500).json({ error: 'Failed to fetch badges' });
+  }
+});
+
+
+app.get('/users/:id/badges', async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    const result = await pool.query(`
+    SELECT b.id, b.name, b.description, b.icon_url, ub.awarded_at
+    FROM user_badges ub
+    JOIN badges b ON ub.badge_id = b.id
+    WHERE ub.user_id = $1
+    `, [userId]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch user badges:', err);
+    res.status(500).json({ error: 'Failed to fetch user badges' });
+  }
+});
+
+
+app.post('/users/:id/badges', verifyAdmin, async (req, res) => {
+  const userId = req.params.id;
+  const { badge_id } = req.body;
+
+  try {
+    const exists = await pool.query(`
+    SELECT 1 FROM user_badges WHERE user_id = $1 AND badge_id = $2
+    `, [userId, badge_id]);
+
+    if (exists.rows.length > 0) {
+      return res.status(409).json({ error: 'Badge already awarded' });
+    }
+
+    await pool.query(`
+    INSERT INTO user_badges (user_id, badge_id) VALUES ($1, $2)
+    `, [userId, badge_id]);
+
+    res.status(201).json({ success: true });
+  } catch (err) {
+    console.error('❌ Failed to award badge:', err);
+    res.status(500).json({ error: 'Failed to award badge' });
+  }
+});
+
+app.post('/debug/award-founder', async (req, res) => {
+  try {
+    await pool.query(`
+    INSERT INTO user_badges (user_id, badge_id)
+    VALUES (1, 1)
+    ON CONFLICT DO NOTHING
+    `);
+    res.json({ message: 'Founder badge awarded to user 1' });
+  } catch (err) {
+    console.error('❌', err);
+    res.status(500).json({ error: 'Failed to award badge' });
+  }
+});
+
+
+// 🛡️ Admin Login2 ------------------------------------------------------------------------------
 app.post('/admin/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
