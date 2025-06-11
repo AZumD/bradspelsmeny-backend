@@ -519,9 +519,7 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
 
     if (borrowCount === 1) {
       // Look up the badge by name
-      const badgeRes = await pool.query(`
-      SELECT id, name, icon_url FROM badges WHERE name = 'First Borrow' LIMIT 1
-      `);
+      const badgeRes = await pool.query(`SELECT id, name, icon_url FROM badges WHERE id = 2`);
       const badge = badgeRes.rows[0];
 
       if (badge) {
