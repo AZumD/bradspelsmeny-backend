@@ -1510,6 +1510,90 @@ app.post('/party/:id/kick', verifyToken, async (req, res) => {
   }
 });
 
+app.post('/party-session', verifyToken, async (req, res) => {
+  const { partyId, gameId, gameTitle, notes } = req.body;
+  const userId = req.user.id;
+
+  if (!partyId || !gameId) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const result = await pool.query(`
+    INSERT INTO party_sessions (party_id, game_id, game_title, created_by, notes)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING *
+    `, [partyId, gameId, gameTitle || null, userId, notes || null]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to create session:', err);
+    res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
+
+app.post('/party-session/:id/round', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { roundNumber, winnerId, notes } = req.body;
+
+  if (!roundNumber || !winnerId) {
+    return res.status(400).json({ error: 'Missing roundNumber or winnerId' });
+  }
+
+  try {
+    const result = await pool.query(`
+    INSERT INTO party_session_rounds (session_id, round_number, winner_id, notes)
+    VALUES ($1, $2, $3, $4)
+    RETURNING *
+    `, [id, roundNumber, winnerId, notes || null]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to log round:', err);
+    res.status(500).json({ error: 'Failed to log round' });
+  }
+});
+
+
+app.get('/party/:id/sessions', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+    SELECT ps.*, u.first_name, u.last_name
+    FROM party_sessions ps
+    JOIN users u ON ps.created_by = u.id
+    WHERE ps.party_id = $1
+    ORDER BY ps.started_at DESC
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch sessions:', err);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+
+app.get('/party-session/:id/rounds', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+    SELECT r.*, u.first_name, u.last_name
+    FROM party_session_rounds r
+    JOIN users u ON r.winner_id = u.id
+    WHERE r.session_id = $1
+    ORDER BY round_number ASC
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch rounds:', err);
+    res.status(500).json({ error: 'Failed to fetch rounds' });
+  }
+});
 
 
 // 🛡️ Admin Login2 ------------------------------------------------------------------------------
