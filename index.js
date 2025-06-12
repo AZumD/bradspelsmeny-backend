@@ -239,7 +239,8 @@ app.post('/games', verifyToken, upload.none(), async (req, res) => {
     title_sv, title_en, description_sv, description_en,
     min_players, max_players, play_time,
     age, tags, img,
-    slow_day_only, trusted_only, condition_rating, staff_picks, min_table_size
+    slow_day_only, trusted_only, members_only, // <-- ADD THIS
+    condition_rating, staff_picks, min_table_size
   } = req.body;
 
   try {
