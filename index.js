@@ -489,7 +489,7 @@ app.get('/stats/lent-out', verifyToken, async (req, res) => {
 
 app.post('/lend/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { userId, note } = req.body;
+  const { userId, note, partyId } = req.body;
 
   if (!userId || isNaN(parseInt(userId))) {
     return res.status(400).json({ error: 'Missing or invalid userId' });
@@ -505,21 +505,21 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
                      WHERE id = $1
                      `, [id]);
 
-    // 2. Insert into history
+    // 2. Insert into history (now includes optional party_id)
     await pool.query(`
-    INSERT INTO game_history (game_id, user_id, action, note)
-    VALUES ($1, $2, 'lend', $3)
-    `, [id, userId, note]);
+    INSERT INTO game_history (game_id, user_id, action, note, party_id)
+    VALUES ($1, $2, 'lend', $3, $4)
+    `, [id, userId, note || null, partyId || null]);
 
     // 3. Check if first borrow
     const borrowCountRes = await pool.query(`
-    SELECT COUNT(*) FROM game_history WHERE user_id = $1 AND action = 'lend'
+    SELECT COUNT(*) FROM game_history
+    WHERE user_id = $1 AND action = 'lend'
     `, [userId]);
 
     const borrowCount = parseInt(borrowCountRes.rows[0].count);
 
     if (borrowCount === 1) {
-      // Look up the badge by name
       const badgeRes = await pool.query(`SELECT id, name, icon_url FROM badges WHERE id = 2`);
       const badge = badgeRes.rows[0];
 
@@ -528,14 +528,12 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
         SELECT 1 FROM user_badges WHERE user_id = $1 AND badge_id = $2
         `, [userId, badge.id]);
 
-        if (existing.rows.length === 0) {
-          // Award it
+        if (existing.rowCount === 0) {
           await pool.query(`
           INSERT INTO user_badges (user_id, badge_id)
           VALUES ($1, $2)
           `, [userId, badge.id]);
 
-          // Add notification with badge info
           await pool.query(`
           INSERT INTO notifications (user_id, type, data)
           VALUES ($1, 'badge_awarded', $2)
@@ -557,6 +555,7 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to lend out game' });
   }
 });
+
 
 
 
@@ -1247,6 +1246,270 @@ app.post('/debug/award-founder', async (req, res) => {
     res.status(500).json({ error: 'Failed to award badge' });
   }
 });
+
+
+// Add near the top or just above your /party routes
+function generateInviteCode(length = 6) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I, O, 1, 0 for readability
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+
+app.post('/party', verifyToken, async (req, res) => {
+  const { name, emoji } = req.body;
+  const userId = req.user.id; // from verifyToken
+
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ error: 'Party name is required.' });
+  }
+
+  try {
+    // Generate a unique invite code
+    let inviteCode;
+    let isUnique = false;
+
+    while (!isUnique) {
+      inviteCode = generateInviteCode();
+      const result = await pool.query('SELECT 1 FROM parties WHERE invite_code = $1', [inviteCode]);
+      if (result.rowCount === 0) isUnique = true;
+    }
+
+    // Create the party
+    const insertParty = await pool.query(
+      `INSERT INTO parties (name, emoji, invite_code, created_by)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id`,
+      [name, emoji || '🎲', inviteCode, userId]
+    );
+
+    const partyId = insertParty.rows[0].id;
+
+    // Add the creator as a member and leader
+    await pool.query(
+      `INSERT INTO party_members (party_id, user_id, is_leader)
+      VALUES ($1, $2, true)`,
+                     [partyId, userId]
+    );
+
+    res.status(201).json({ success: true, partyId, inviteCode });
+  } catch (err) {
+    console.error('Error creating party:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+app.get('/party/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+    SELECT
+    p.id,
+    p.name,
+    p.emoji,
+    p.invite_code,
+    p.created_by,
+    p.created_at,
+    u.first_name AS creator_first_name,
+    u.last_name AS creator_last_name
+    FROM parties p
+    LEFT JOIN users u ON p.created_by = u.id
+    WHERE p.id = $1
+    `, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Party not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to fetch party info:', err);
+    res.status(500).json({ error: 'Failed to fetch party' });
+  }
+});
+
+app.get('/party/:id/members', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+    SELECT
+    u.id AS user_id,
+    u.first_name,
+    u.last_name,
+    u.avatar_url,
+    pm.is_leader,
+    pm.nickname,
+    pm.joined_at
+    FROM party_members pm
+    JOIN users u ON pm.user_id = u.id
+    WHERE pm.party_id = $1
+    ORDER BY pm.joined_at ASC
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch party members:', err);
+    res.status(500).json({ error: 'Failed to fetch party members' });
+  }
+});
+
+
+app.get('/my-parties', verifyToken, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const result = await pool.query(`
+    SELECT
+    p.id,
+    p.name,
+    p.emoji,
+    p.invite_code,
+    p.created_at,
+    pm.is_leader
+    FROM party_members pm
+    JOIN parties p ON pm.party_id = p.id
+    WHERE pm.user_id = $1 AND p.is_active = TRUE
+    ORDER BY p.created_at DESC
+    `, [userId]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch user parties:', err);
+    res.status(500).json({ error: 'Failed to fetch parties' });
+  }
+});
+
+app.post('/party/join', verifyToken, async (req, res) => {
+  const { code } = req.body;
+  const userId = req.user.id;
+
+  if (!code || code.trim().length !== 6) {
+    return res.status(400).json({ error: 'Invalid invite code.' });
+  }
+
+  try {
+    // 1. Find the party by invite code
+    const partyRes = await pool.query(
+      'SELECT id FROM parties WHERE invite_code = $1 AND is_active = TRUE',
+      [code.trim().toUpperCase()]
+    );
+
+    if (partyRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Party not found or inactive.' });
+    }
+
+    const partyId = partyRes.rows[0].id;
+
+    // 2. Check if user is already a member
+    const memberRes = await pool.query(
+      'SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2',
+      [partyId, userId]
+    );
+
+    if (memberRes.rowCount > 0) {
+      return res.status(400).json({ error: 'Already a member of this party.' });
+    }
+
+    // 3. Join the party
+    await pool.query(
+      'INSERT INTO party_members (party_id, user_id) VALUES ($1, $2)',
+                     [partyId, userId]
+    );
+
+    res.status(200).json({ success: true, partyId });
+  } catch (err) {
+    console.error('❌ Failed to join party:', err);
+    res.status(500).json({ error: 'Failed to join party' });
+  }
+});
+
+
+app.post('/party/:id/leave', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    // Remove member from party
+    const result = await pool.query(`
+    DELETE FROM party_members
+    WHERE party_id = $1 AND user_id = $2
+    RETURNING *
+    `, [id, userId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Not a member of this party.' });
+    }
+
+    // Check if party is now empty
+    const check = await pool.query(
+      'SELECT 1 FROM party_members WHERE party_id = $1',
+      [id]
+    );
+
+    if (check.rowCount === 0) {
+      await pool.query(
+        'UPDATE parties SET is_active = FALSE WHERE id = $1',
+        [id]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Failed to leave party:', err);
+    res.status(500).json({ error: 'Failed to leave party' });
+  }
+});
+
+
+app.post('/party/:id/kick', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { target_user_id } = req.body;
+  const myUserId = req.user.id;
+
+  if (!target_user_id) {
+    return res.status(400).json({ error: 'Missing target user ID.' });
+  }
+
+  try {
+    // Check if current user is leader
+    const leaderCheck = await pool.query(`
+    SELECT is_leader FROM party_members
+    WHERE party_id = $1 AND user_id = $2
+    `, [id, myUserId]);
+
+    if (leaderCheck.rows.length === 0 || !leaderCheck.rows[0].is_leader) {
+      return res.status(403).json({ error: 'Only party leader can kick members.' });
+    }
+
+    // Prevent self-kick
+    if (parseInt(target_user_id) === myUserId) {
+      return res.status(400).json({ error: 'Leader cannot kick themselves.' });
+    }
+
+    // Kick the member
+    const kick = await pool.query(`
+    DELETE FROM party_members
+    WHERE party_id = $1 AND user_id = $2
+    RETURNING *
+    `, [id, target_user_id]);
+
+    if (kick.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found in this party.' });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Failed to kick member:', err);
+    res.status(500).json({ error: 'Failed to kick member' });
+  }
+});
+
 
 
 // 🛡️ Admin Login2 ------------------------------------------------------------------------------
