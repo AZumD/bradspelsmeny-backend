@@ -1279,7 +1279,7 @@ app.post('/party', verifyToken, async (req, res) => {
     }
 
     // 👉 Add this line with your real hosted image URL
-    const avatarUrl = 'https://azumd.github.io/bradspelsmeny/img/avatar-party-default.png';
+    const avatarUrl = 'https://azumd.github.io/bradspelsmeny/img/avatar-party-default.webp';
 
     // Create the party
     const insertParty = await pool.query(
