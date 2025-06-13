@@ -1248,7 +1248,7 @@ app.post('/debug/award-founder', async (req, res) => {
 });
 
 
-// Add near the top or just above your /party routes
+//PARTY========================================================================================
 function generateInviteCode(length = 6) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I, O, 1, 0 for readability
   let code = '';
