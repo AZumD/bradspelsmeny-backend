@@ -1278,12 +1278,15 @@ app.post('/party', verifyToken, async (req, res) => {
       if (result.rowCount === 0) isUnique = true;
     }
 
+    // 👉 Add this line with your real hosted image URL
+    const avatarUrl = 'https://azumd.github.io/bradspelsmeny/img/avatar-party-default.png';
+
     // Create the party
     const insertParty = await pool.query(
-      `INSERT INTO parties (name, emoji, invite_code, created_by)
-      VALUES ($1, $2, $3, $4)
+      `INSERT INTO parties (name, emoji, invite_code, created_by, avatar)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING id`,
-      [name, emoji || '🎲', inviteCode, userId]
+      [name, emoji || '🎲', inviteCode, userId, avatarUrl]
     );
 
     const partyId = insertParty.rows[0].id;
@@ -1313,6 +1316,7 @@ app.get('/party/:id', verifyToken, async (req, res) => {
     p.name,
     p.emoji,
     p.invite_code,
+    p.avatar, -- 👈 Add this line
     p.created_by,
     p.created_at,
     u.first_name AS creator_first_name,
