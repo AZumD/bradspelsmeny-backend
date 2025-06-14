@@ -233,7 +233,7 @@ app.post('/logout', (req, res) => {
   res.json({ message: 'Logged out' });
 });
 
-
+//GAMES ROUTE =========================================================================================
 app.post('/games', verifyToken, upload.none(), async (req, res) => {
   const {
     title_sv, title_en, description_sv, description_en,
@@ -312,6 +312,28 @@ app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
   }
 });
 
+
+app.get('/games/slug/:slug', async (req, res) => {
+  const { slug } = req.params;
+  try {
+    const result = await pool.query('SELECT * FROM games WHERE slug = $1', [slug]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching game by slug:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+
+
+
+
+//USERS ROUTE =============================================================================
 
 app.get('/users', verifyToken, async (req, res) => {
   try {
@@ -1677,6 +1699,9 @@ app.delete('/party/:partyId/messages/:messageId', verifyToken, async (req, res) 
     res.status(500).json({ error: 'Failed to delete message' });
   }
 });
+
+
+
 
 
 
