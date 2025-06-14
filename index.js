@@ -1601,6 +1601,52 @@ app.get('/party-session/:id/rounds', verifyToken, async (req, res) => {
 });
 
 
+
+app.get('/party/:id/messages', verifyToken, async (req, res) => {
+  const partyId = parseInt(req.params.id);
+
+  try {
+    const result = await pool.query(`
+    SELECT pm.id, pm.content, pm.created_at, u.first_name AS sender_name
+    FROM party_messages pm
+    JOIN users u ON pm.user_id = u.id
+    WHERE pm.party_id = $1
+    ORDER BY pm.created_at ASC
+    LIMIT 100;
+    `, [partyId]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching messages:', err);
+    res.status(500).json({ error: 'Failed to load messages' });
+  }
+});
+
+
+
+app.post('/party/:id/messages', verifyToken, async (req, res) => {
+  const partyId = parseInt(req.params.id);
+  const userId = req.user.id;
+  const { content } = req.body;
+
+  if (!content || content.trim() === '') {
+    return res.status(400).json({ error: 'Message content cannot be empty' });
+  }
+
+  try {
+    await pool.query(`
+    INSERT INTO party_messages (party_id, user_id, content)
+    VALUES ($1, $2, $3);
+    `, [partyId, userId, content.trim()]);
+
+    res.status(201).json({ success: true });
+  } catch (err) {
+    console.error('Error posting message:', err);
+    res.status(500).json({ error: 'Failed to post message' });
+  }
+});
+
+
 // 🛡️ Admin Login2 ------------------------------------------------------------------------------
 app.post('/admin/login', async (req, res) => {
   const { username, password } = req.body;
