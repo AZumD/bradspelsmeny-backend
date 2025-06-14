@@ -1608,6 +1608,7 @@ app.get('/party/:id/messages', verifyToken, async (req, res) => {
   try {
     const result = await pool.query(`
     SELECT pm.id, pm.content, pm.created_at,
+    pm.user_id,                    -- 👈 make sure to include this
     u.username, u.avatar_url
     FROM party_messages pm
     JOIN users u ON pm.user_id = u.id
@@ -1615,6 +1616,7 @@ app.get('/party/:id/messages', verifyToken, async (req, res) => {
     ORDER BY pm.created_at ASC
     LIMIT 100;
     `, [partyId]);
+
 
 
     res.json(result.rows);
