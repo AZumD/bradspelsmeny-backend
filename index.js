@@ -1606,7 +1606,7 @@ app.get('/party/:id/messages', verifyToken, async (req, res) => {
   const partyId = parseInt(req.params.id);
 
   try {
-    cconst result = await pool.query(`
+    const result = await pool.query(`
     SELECT pm.id, pm.content, pm.created_at,
     u.username, u.avatar_url
     FROM party_messages pm
