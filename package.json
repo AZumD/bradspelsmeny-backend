@@ -17,6 +17,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.0",
     "pg": "^8.16.0",
+    "slugify": "^1.6.6",
     "sqlite3": "^5.1.7"
   },
   "repository": {
