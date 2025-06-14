@@ -1374,6 +1374,7 @@ app.get('/my-parties', verifyToken, async (req, res) => {
     p.name,
     p.emoji,
     p.invite_code,
+    p.avatar,
     p.created_at,
     pm.is_leader
     FROM party_members pm
