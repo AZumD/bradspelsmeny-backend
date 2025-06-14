@@ -1613,7 +1613,7 @@ app.get('/party/:id/messages', verifyToken, async (req, res) => {
     FROM party_messages pm
     JOIN users u ON pm.user_id = u.id
     WHERE pm.party_id = $1
-    ORDER BY pm.created_at ASC
+    ORDER BY pm.created_at DESC
     LIMIT 100;
     `, [partyId]);
 
