@@ -33,48 +33,7 @@ app.use(cors({
 app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads', 'avatars')));
 
 
-app.post('/users/:id/avatar', verifyToken, upload.single('avatar'), async (req, res) => {
-  const { id } = req.params;
 
-  // Only owner or admin can upload avatar
-  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
-
-  try {
-    // Save file to a folder, e.g. ./uploads/avatars/, or use cloud storage
-    const avatarFolder = path.join(__dirname, 'uploads', 'avatars');
-    if (!fs.existsSync(avatarFolder)) {
-      fs.mkdirSync(avatarFolder, { recursive: true });
-    }
-
-    // Generate unique filename (e.g., userID + timestamp + extension)
-    const ext = path.extname(req.file.originalname);
-    const filename = `avatar_${id}_${Date.now()}${ext}`;
-    const filepath = path.join(avatarFolder, filename);
-
-    // Write file to disk
-    fs.writeFileSync(filepath, req.file.buffer);
-
-    // Construct URL (adjust base URL as needed)
-    const avatarUrl = `/uploads/avatars/${filename}`;
-
-    // Update DB with avatar URL
-    const result = await pool.query(
-      'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2 RETURNING avatar_url',
-                                    [avatarUrl, id]
-    );
-
-    res.json({ avatar_url: avatarUrl });
-  } catch (err) {
-    console.error('❌ Failed to upload avatar:', err);
-    res.status(500).json({ error: 'Failed to upload avatar' });
-  }
-});
 
 
 app.use(express.json());
@@ -92,17 +51,7 @@ function verifyToken(req, res, next) {
   });
 }
 
-function verifyAdmin(req, res, next) {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Missing token' });
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err || user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-    req.user = user;
-    next();
-  });
-}
 
 app.get('/', (req, res) => {
   res.send('🎲 Board Game Backend API is running.');
@@ -167,71 +116,7 @@ app.post('/register', async (req, res) => {
 
 
 
-// 🔑 User Login
-const refreshTokens = new Set(); // In-memory storage of valid refresh tokens. For production, store in DB.
 
-// Adjust your login endpoint to issue refresh token:
-app.post('/login', async (req, res) => {
-  const { phone, password } = req.body;
-  if (!phone || !password) {
-    return res.status(400).json({ error: 'Missing phone or password' });
-  }
-
-  try {
-    const result = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
-    const user = result.rows[0];
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ error: 'Invalid credentials' });
-
-    const accessToken = jwt.sign({ id: user.id, role: 'user' }, JWT_SECRET, { expiresIn: '2h' });
-    const refreshToken = jwt.sign({ id: user.id, role: 'user' }, JWT_SECRET, { expiresIn: '7d' });
-
-    refreshTokens.add(refreshToken);
-
-    res.json({
-      token: accessToken,
-      refreshToken,
-      user: {
-        id: user.id,
-        username: user.username,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        phone: user.phone,
-        membership_status: user.membership_status  // 🛠️ Add this
-      }
-    });
-  } catch (err) {
-    console.error('❌ User login failed:', err);
-    res.status(500).json({ error: 'Login failed' });
-  }
-});
-
-
-// Add the refresh token endpoint
-app.post('/refresh-token', (req, res) => {
-  const { refreshToken } = req.body;
-  if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' });
-  if (!refreshTokens.has(refreshToken)) return res.status(403).json({ error: 'Invalid refresh token' });
-
-  jwt.verify(refreshToken, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid refresh token' });
-
-    // Issue new access token
-    const accessToken = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '2h' });
-    res.json({ token: accessToken });
-  });
-});
-
-// (Optional) Add a logout endpoint to revoke refresh tokens
-app.post('/logout', (req, res) => {
-  const { refreshToken } = req.body;
-  if (refreshToken) {
-    refreshTokens.delete(refreshToken);
-  }
-  res.json({ message: 'Logged out' });
-});
 
 //GAMES ROUTE =========================================================================================
 const slugify = require('slugify'); // <-- make sure this is declared at the top of your file
@@ -341,160 +226,6 @@ app.get('/games/slug/:slug', async (req, res) => {
 
 
 
-
-
-//USERS ROUTE =============================================================================
-
-app.get('/users', verifyToken, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM users ORDER BY last_name ASC');
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ Failed to fetch users:', err);
-    res.status(500).json({ error: 'Failed to fetch users' });
-  }
-});
-
-app.post('/users', verifyToken, async (req, res) => {
-  console.log("📦 Incoming /users body:", req.body); // 🔍 Log the actual data
-
-  const { first_name, last_name, phone } = req.body;
-
-  if (!first_name || !last_name || !phone) {
-    return res.status(400).json({ error: 'Missing user data' });
-  }
-
-  try {
-    const result = await pool.query(
-      `INSERT INTO users (first_name, last_name, phone) VALUES ($1, $2, $3) RETURNING *`,
-                                    [first_name, last_name, phone]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('❌ Failed to add user:', err);
-    res.status(500).json({ error: 'Failed to add user' });
-  }
-});
-
-app.get('/users/:id', verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const requesterId = req.user.id;
-  const isOwner = requesterId === parseInt(id);
-  const isAdmin = req.user.role === 'admin';
-  let isFriend = false;
-
-  try {
-    // Check friendship only if not owner/admin
-    if (!isOwner && !isAdmin) {
-      const friendCheck = await pool.query(
-        `SELECT 1 FROM friends
-        WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
-        LIMIT 1`,
-        [requesterId, id]
-      );
-      isFriend = friendCheck.rows.length > 0;
-    }
-
-    // Fetch user profile info
-    const result = await pool.query(
-      `SELECT
-      id, username, first_name, last_name, avatar_url, bio, membership_status, created_at, updated_at, email
-      FROM users WHERE id = $1`,
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    let user = result.rows[0];
-
-    // Hide sensitive info if not owner/admin/friend
-    if (!isOwner && !isAdmin && !isFriend) {
-      delete user.email;
-      delete user.bio;
-    }
-
-    res.json(user);
-  } catch (err) {
-    console.error('❌ Failed to fetch user profile:', err);
-    res.status(500).json({ error: 'Failed to fetch user profile' });
-  }
-});
-
-
-
-
-
-app.put('/users/:id', verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  // Only owner or admin can update
-  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-
-  const {
-    first_name,
-    last_name,
-    phone,
-    email,
-    bio,
-    membership_status // Optional: Only allow admin to update this?
-  } = req.body;
-
-  // Optional: Add validation for email format, membership_status values here
-
-  try {
-    // For membership_status, only admin can update it, else keep existing
-    const membershipStatusToSet = (req.user.role === 'admin' && membership_status) ? membership_status : undefined;
-
-    const {
-      username,
-      first_name,
-      last_name,
-      phone,
-      email,
-      bio,
-      membership_status // Optional: Only allow admin to update this?
-    } = req.body;
-
-    // ...
-
-    const result = await pool.query(
-      `UPDATE users SET
-      username = COALESCE($1, username),
-                                    first_name = COALESCE($2, first_name),
-                                    last_name = COALESCE($3, last_name),
-                                    phone = COALESCE($4, phone),
-                                    email = COALESCE($5, email),
-                                    bio = COALESCE($6, bio),
-                                    membership_status = COALESCE($7, membership_status),
-                                    updated_at = NOW()
-                                    WHERE id = $8
-                                    RETURNING id, username, first_name, last_name, phone, email, avatar_url, bio, membership_status, created_at, updated_at`,
-                                    [
-                                      username || null,
-                                    first_name || null,
-                                    last_name || null,
-                                    phone || null,
-                                    email || null,
-                                    bio || null,
-                                    membershipStatusToSet || null,
-                                    id
-                                    ]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('❌ Failed to update user profile:', err);
-    res.status(500).json({ error: 'Failed to update user profile' });
-  }
-});
 
 
 
@@ -928,84 +659,6 @@ app.get('/users/:id/friends', verifyToken, async (req, res) => {
   }
 });
 
-
-// GET /users/:id/borrow-log — get borrowing history for a user
-app.get('/users/:id/borrow-log', verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const requesterId = req.user.id;
-  const isOwner = requesterId === parseInt(id);
-  const isAdmin = req.user.role === 'admin';
-
-  let isFriend = false;
-  if (!isOwner && !isAdmin) {
-    const friendCheck = await pool.query(
-      `SELECT 1 FROM friends
-      WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
-      LIMIT 1`,
-      [requesterId, id]
-    );
-    isFriend = friendCheck.rows.length > 0;
-  }
-
-  if (!isOwner && !isAdmin && !isFriend) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-
-  try {
-    const result = await pool.query(`
-    SELECT
-    gh.id,
-    gh.game_id,
-    g.title_sv AS game_title,
-    gh.action,
-    gh.note,
-    gh.timestamp,
-    gh.returned_at
-    FROM game_history gh
-    JOIN games g ON gh.game_id = g.id
-    WHERE gh.user_id = $1
-    ORDER BY gh.timestamp DESC
-    LIMIT 50
-    `, [id]);
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ Failed to fetch borrow log:', err);
-    res.status(500).json({ error: 'Failed to fetch borrow log' });
-  }
-});
-app.get('/notifications', verifyToken, async (req, res) => {
-  try {
-    const result = await pool.query(`
-    SELECT * FROM notifications
-    WHERE user_id = $1
-    ORDER BY created_at DESC
-    `, [req.user.id]);
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ Failed to fetch notifications:', err);
-    res.status(500).json({ error: 'Failed to fetch notifications' });
-  }
-});
-app.post('/notifications/:id/read', verifyToken, async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const result = await pool.query(`
-    UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2 RETURNING *
-    `, [id, req.user.id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Notification not found' });
-    }
-
-    res.json({ message: 'Marked as read' });
-  } catch (err) {
-    console.error('❌ Failed to mark notification as read:', err);
-    res.status(500).json({ error: 'Failed to mark as read' });
-  }
-});
 // In your Express backend (for dev only)
 app.post('/notifications/test', verifyToken, async (req, res) => {
   const userId = req.user.id;
@@ -1235,49 +888,6 @@ app.get('/users/:id/badges', async (req, res) => {
 });
 
 
-app.post('/users/:id/badges', verifyAdmin, async (req, res) => {
-  const userId = req.params.id;
-  const { badge_id } = req.body;
-
-  try {
-    const result = await pool.query(`
-    INSERT INTO user_badges (user_id, badge_id)
-    VALUES ($1, $2)
-    ON CONFLICT DO NOTHING
-    RETURNING *
-    `, [userId, badge_id]);
-
-    if (result.rowCount === 0) {
-      return res.status(200).json({
-        success: false,
-        message: 'User already has this badge'
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'Badge awarded'
-    });
-  } catch (err) {
-    console.error('❌ Failed to award badge:', err);
-    res.status(500).json({ error: 'Failed to award badge' });
-  }
-});
-
-
-app.post('/debug/award-founder', async (req, res) => {
-  try {
-    await pool.query(`
-    INSERT INTO user_badges (user_id, badge_id)
-    VALUES (1, 1)
-    ON CONFLICT DO NOTHING
-    `);
-    res.json({ message: 'Founder badge awarded to user 1' });
-  } catch (err) {
-    console.error('❌', err);
-    res.status(500).json({ error: 'Failed to award badge' });
-  }
-});
 
 
 //PARTY========================================================================================
@@ -1710,40 +1320,258 @@ app.delete('/party/:partyId/messages/:messageId', verifyToken, async (req, res) 
   }
 });
 
+//USERS ROUTE =============================================================================
 
+app.get('/users', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM users ORDER BY last_name ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch users:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
 
+app.post('/users', verifyToken, async (req, res) => {
+  console.log("📦 Incoming /users body:", req.body); // 🔍 Log the actual data
 
+  const { first_name, last_name, phone } = req.body;
 
-
-// 🛡️ Admin Login2 ------------------------------------------------------------------------------
-app.post('/admin/login', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Missing username or password' });
+  if (!first_name || !last_name || !phone) {
+    return res.status(400).json({ error: 'Missing user data' });
   }
 
   try {
-    const result = await pool.query('SELECT * FROM admin_users WHERE username = $1', [username]);
-    const admin = result.rows[0];
-    if (!admin) return res.status(401).json({ error: 'Invalid credentials' });
+    const result = await pool.query(
+      `INSERT INTO users (first_name, last_name, phone) VALUES ($1, $2, $3) RETURNING *`,
+                                    [first_name, last_name, phone]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to add user:', err);
+    res.status(500).json({ error: 'Failed to add user' });
+  }
+});
 
-    const match = await bcrypt.compare(password, admin.password);
+app.get('/users/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const requesterId = req.user.id;
+  const isOwner = requesterId === parseInt(id);
+  const isAdmin = req.user.role === 'admin';
+  let isFriend = false;
+
+  try {
+    // Check friendship only if not owner/admin
+    if (!isOwner && !isAdmin) {
+      const friendCheck = await pool.query(
+        `SELECT 1 FROM friends
+        WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
+        LIMIT 1`,
+        [requesterId, id]
+      );
+      isFriend = friendCheck.rows.length > 0;
+    }
+
+    // Fetch user profile info
+    const result = await pool.query(
+      `SELECT
+      id, username, first_name, last_name, avatar_url, bio, membership_status, created_at, updated_at, email
+      FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let user = result.rows[0];
+
+    // Hide sensitive info if not owner/admin/friend
+    if (!isOwner && !isAdmin && !isFriend) {
+      delete user.email;
+      delete user.bio;
+    }
+
+    res.json(user);
+  } catch (err) {
+    console.error('❌ Failed to fetch user profile:', err);
+    res.status(500).json({ error: 'Failed to fetch user profile' });
+  }
+});
+
+
+
+
+
+app.put('/users/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  // Only owner or admin can update
+  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const {
+    first_name,
+    last_name,
+    phone,
+    email,
+    bio,
+    membership_status // Optional: Only allow admin to update this?
+  } = req.body;
+
+  // Optional: Add validation for email format, membership_status values here
+
+  try {
+    // For membership_status, only admin can update it, else keep existing
+    const membershipStatusToSet = (req.user.role === 'admin' && membership_status) ? membership_status : undefined;
+
+    const {
+      username,
+      first_name,
+      last_name,
+      phone,
+      email,
+      bio,
+      membership_status // Optional: Only allow admin to update this?
+    } = req.body;
+
+    // ...
+
+    const result = await pool.query(
+      `UPDATE users SET
+      username = COALESCE($1, username),
+                                    first_name = COALESCE($2, first_name),
+                                    last_name = COALESCE($3, last_name),
+                                    phone = COALESCE($4, phone),
+                                    email = COALESCE($5, email),
+                                    bio = COALESCE($6, bio),
+                                    membership_status = COALESCE($7, membership_status),
+                                    updated_at = NOW()
+                                    WHERE id = $8
+                                    RETURNING id, username, first_name, last_name, phone, email, avatar_url, bio, membership_status, created_at, updated_at`,
+                                    [
+                                      username || null,
+                                    first_name || null,
+                                    last_name || null,
+                                    phone || null,
+                                    email || null,
+                                    bio || null,
+                                    membershipStatusToSet || null,
+                                    id
+                                    ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to update user profile:', err);
+    res.status(500).json({ error: 'Failed to update user profile' });
+  }
+});
+
+
+
+app.post('/users/:id/avatar', verifyToken, upload.single('avatar'), async (req, res) => {
+  const { id } = req.params;
+
+  // Only owner or admin can upload avatar
+  if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  try {
+    // Save file to a folder, e.g. ./uploads/avatars/, or use cloud storage
+    const avatarFolder = path.join(__dirname, 'uploads', 'avatars');
+    if (!fs.existsSync(avatarFolder)) {
+      fs.mkdirSync(avatarFolder, { recursive: true });
+    }
+
+    // Generate unique filename (e.g., userID + timestamp + extension)
+    const ext = path.extname(req.file.originalname);
+    const filename = `avatar_${id}_${Date.now()}${ext}`;
+    const filepath = path.join(avatarFolder, filename);
+
+    // Write file to disk
+    fs.writeFileSync(filepath, req.file.buffer);
+
+    // Construct URL (adjust base URL as needed)
+    const avatarUrl = `/uploads/avatars/${filename}`;
+
+    // Update DB with avatar URL
+    const result = await pool.query(
+      'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2 RETURNING avatar_url',
+                                    [avatarUrl, id]
+    );
+
+    res.json({ avatar_url: avatarUrl });
+  } catch (err) {
+    console.error('❌ Failed to upload avatar:', err);
+    res.status(500).json({ error: 'Failed to upload avatar' });
+  }
+});
+// 🔑 User Login
+const refreshTokens = new Set();
+
+// Adjust your login endpoint to issue refresh token:
+app.post('/login', async (req, res) => {
+  const { phone, password } = req.body;
+  if (!phone || !password) {
+    return res.status(400).json({ error: 'Missing phone or password' });
+  }
+
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE phone = $1', [phone]);
+    const user = result.rows[0];
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+    const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const accessToken = jwt.sign({ id: admin.id, role: 'admin' }, JWT_SECRET, { expiresIn: '2h' });
-    const refreshToken = jwt.sign({ id: admin.id, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
-
-    // Store refresh tokens in-memory (replace with DB for production)
+    const role = user.is_admin ? 'admin' : 'user';
+    const accessToken = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: '2h' });
+    const refreshToken = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: '7d' });
     refreshTokens.add(refreshToken);
 
-    res.json({ token: accessToken, refreshToken });
+    res.json({
+      token: accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        username: user.username,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone: user.phone,
+        membership_status: user.membership_status,
+        is_admin: user.is_admin
+      }
+    });
   } catch (err) {
-    console.error('❌ Admin login failed:', err);
+    console.error('❌ User login failed:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 });
 
-app.post('/admin/logout', (req, res) => {
+// Add the refresh token endpoint
+app.post('/refresh-token', (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' });
+  if (!refreshTokens.has(refreshToken)) return res.status(403).json({ error: 'Invalid refresh token' });
+
+  jwt.verify(refreshToken, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid refresh token' });
+    const accessToken = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '2h' });
+    res.json({ token: accessToken });
+  });
+});
+app.post('/logout', (req, res) => {
   const { refreshToken } = req.body;
   if (refreshToken) {
     refreshTokens.delete(refreshToken);
@@ -1753,18 +1581,142 @@ app.post('/admin/logout', (req, res) => {
 
 
 
-app.post('/admin/refresh-token', (req, res) => {
-  const { refreshToken } = req.body;
-  if (!refreshToken) return res.status(400).json({ error: 'Missing refresh token' });
-  if (!refreshTokens.has(refreshToken)) return res.status(403).json({ error: 'Invalid refresh token' });
+// GET /users/:id/borrow-log — get borrowing history for a user
+app.get('/users/:id/borrow-log', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const requesterId = req.user.id;
+  const isOwner = requesterId === parseInt(id);
+  const isAdmin = req.user.role === 'admin';
 
-  jwt.verify(refreshToken, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid refresh token' });
+  let isFriend = false;
+  if (!isOwner && !isAdmin) {
+    const friendCheck = await pool.query(
+      `SELECT 1 FROM friends
+      WHERE (user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1)
+      LIMIT 1`,
+      [requesterId, id]
+    );
+    isFriend = friendCheck.rows.length > 0;
+  }
 
-    const accessToken = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '2h' });
-    res.json({ token: accessToken });
-  });
+  if (!isOwner && !isAdmin && !isFriend) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    const result = await pool.query(`
+    SELECT
+    gh.id,
+    gh.game_id,
+    g.title_sv AS game_title,
+    gh.action,
+    gh.note,
+    gh.timestamp,
+    gh.returned_at
+    FROM game_history gh
+    JOIN games g ON gh.game_id = g.id
+    WHERE gh.user_id = $1
+    ORDER BY gh.timestamp DESC
+    LIMIT 50
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch borrow log:', err);
+    res.status(500).json({ error: 'Failed to fetch borrow log' });
+  }
 });
+app.get('/notifications', verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+    SELECT * FROM notifications
+    WHERE user_id = $1
+    ORDER BY created_at DESC
+    `, [req.user.id]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch notifications:', err);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+app.post('/notifications/:id/read', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+    UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2 RETURNING *
+    `, [id, req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    res.json({ message: 'Marked as read' });
+  } catch (err) {
+    console.error('❌ Failed to mark notification as read:', err);
+    res.status(500).json({ error: 'Failed to mark as read' });
+  }
+});
+
+
+function verifyAdmin(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Missing token' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err || user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+    req.user = user;
+    next();
+  });
+}
+
+
+app.post('/users/:id/badges', verifyAdmin, async (req, res) => {
+  const userId = req.params.id;
+  const { badge_id } = req.body;
+
+  try {
+    const result = await pool.query(`
+    INSERT INTO user_badges (user_id, badge_id)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+    RETURNING *
+    `, [userId, badge_id]);
+
+    if (result.rowCount === 0) {
+      return res.status(200).json({
+        success: false,
+        message: 'User already has this badge'
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Badge awarded'
+    });
+  } catch (err) {
+    console.error('❌ Failed to award badge:', err);
+    res.status(500).json({ error: 'Failed to award badge' });
+  }
+});
+
+
+app.post('/debug/award-founder', async (req, res) => {
+  try {
+    await pool.query(`
+    INSERT INTO user_badges (user_id, badge_id)
+    VALUES (1, 1)
+    ON CONFLICT DO NOTHING
+    `);
+    res.json({ message: 'Founder badge awarded to user 1' });
+  } catch (err) {
+    console.error('❌', err);
+    res.status(500).json({ error: 'Failed to award badge' });
+  }
+});
+
 
 
 
