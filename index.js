@@ -1606,14 +1606,16 @@ app.get('/party/:id/messages', verifyToken, async (req, res) => {
   const partyId = parseInt(req.params.id);
 
   try {
-    const result = await pool.query(`
-    SELECT pm.id, pm.content, pm.created_at, u.first_name AS sender_name
+    cconst result = await pool.query(`
+    SELECT pm.id, pm.content, pm.created_at,
+    u.username, u.avatar_url
     FROM party_messages pm
     JOIN users u ON pm.user_id = u.id
     WHERE pm.party_id = $1
     ORDER BY pm.created_at ASC
     LIMIT 100;
     `, [partyId]);
+
 
     res.json(result.rows);
   } catch (err) {
