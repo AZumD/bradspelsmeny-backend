@@ -1649,6 +1649,35 @@ app.post('/party/:id/messages', verifyToken, async (req, res) => {
 });
 
 
+app.delete('/party/:partyId/messages/:messageId', verifyToken, async (req, res) => {
+  const { partyId, messageId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    // Only allow deleting own messages
+    const check = await pool.query(
+      'SELECT user_id FROM party_messages WHERE id = $1 AND party_id = $2',
+      [messageId, partyId]
+    );
+
+    if (check.rowCount === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    if (check.rows[0].user_id !== userId) {
+      return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+
+    await pool.query('DELETE FROM party_messages WHERE id = $1', [messageId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting message:', err);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+
+
 // 🛡️ Admin Login2 ------------------------------------------------------------------------------
 app.post('/admin/login', async (req, res) => {
   const { username, password } = req.body;
