@@ -375,21 +375,33 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
 
 
 app.post('/return/:id', verifyToken, async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.params; // game_id
+  const { return_notes } = req.body; // optional field
 
   try {
-    // Mark game as returned
+    const returnedByUserId = req.user.id;
+
+    // 1. Mark game as not lent out
     await pool.query(`
     UPDATE games
     SET lent_out = false
     WHERE id = $1
     `, [id]);
 
-    // Insert a return action log with returned_at timestamp
+    // 2. System-level return log
     await pool.query(`
     INSERT INTO game_history (game_id, action, returned_at, timestamp)
     VALUES ($1, 'return', NOW(), NOW())
     `, [id]);
+
+    // 3. Update any active party session with end time and metadata
+    await pool.query(`
+    UPDATE party_sessions
+    SET ended_at = NOW(),
+                     returned_by_user_id = $1,
+                     return_notes = $2
+                     WHERE game_id = $3 AND ended_at IS NULL
+                     `, [returnedByUserId, return_notes || null, id]);
 
     res.json({ message: '✅ Game returned' });
   } catch (err) {
@@ -397,6 +409,8 @@ app.post('/return/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to return game' });
   }
 });
+
+
 
 app.get('/games/:id/current-lend', verifyToken, async (req, res) => {
   const { id } = req.params;
@@ -468,37 +482,92 @@ app.get('/stats/most-lent-this-month', verifyToken, async (req, res) => {
 });
 
 app.post('/order-game', async (req, res) => {
-  const { game_id, game_title, table_id, first_name, last_name, phone } = req.body;
-
-  if (!game_id || !game_title || !table_id || !first_name || !last_name || !phone) {
-    return res.status(400).json({ error: 'Missing data' });
-  }
+  const { first_name, last_name, phone, table_number, game_id, party_id } = req.body;
 
   try {
-    await pool.query(
-      `INSERT INTO game_orders (game_id, game_title, table_id, first_name, last_name, phone)
-      VALUES ($1, $2, $3, $4, $5, $6)`,
-                     [game_id, game_title, table_id, first_name, last_name, phone]
-    );
+    // 1. Check if user already exists
+    let userResult = await pool.query('SELECT id FROM users WHERE phone = $1', [phone]);
+    let user_id;
 
-    res.status(200).json({ message: 'Game order placed' });
+    if (userResult.rows.length > 0) {
+      user_id = userResult.rows[0].id;
+    } else {
+      const insertUserResult = await pool.query(
+        'INSERT INTO users (first_name, last_name, phone) VALUES ($1, $2, $3) RETURNING id',
+                                                [first_name, last_name, phone]
+      );
+      user_id = insertUserResult.rows[0].id;
+    }
+
+    // 2. Create game order
+    const orderResult = await pool.query(
+      `INSERT INTO game_orders (user_id, game_id, table_number, created_at)
+      VALUES ($1, $2, $3, NOW())
+      RETURNING id`,
+      [user_id, game_id, table_number]
+    );
+    const game_order_id = orderResult.rows[0].id;
+
+    let partySessionId = null;
+
+    // 3. Handle party logic
+    if (party_id) {
+      // 3a. Create party session
+      const partySessionResult = await pool.query(
+        `INSERT INTO party_sessions (party_id, game_id, user_id, started_at)
+        VALUES ($1, $2, $3, NOW())
+        RETURNING id`,
+        [party_id, game_id, user_id]
+      );
+      partySessionId = partySessionResult.rows[0].id;
+
+      // 3b. Get all members
+      const membersResult = await pool.query(
+        `SELECT user_id FROM party_members WHERE party_id = $1`,
+        [party_id]
+      );
+      const partyMembers = membersResult.rows.map(row => row.user_id);
+
+      // 3c. Log game for each member
+      for (const memberId of partyMembers) {
+        await pool.query(
+          `INSERT INTO game_history (user_id, game_id, party_id, borrowed_at)
+          VALUES ($1, $2, $3, NOW())`,
+                         [memberId, game_id, party_id]
+        );
+      }
+
+      // 3d. Add main user if not included
+      if (!partyMembers.includes(user_id)) {
+        await pool.query(
+          `INSERT INTO game_history (user_id, game_id, party_id, borrowed_at)
+          VALUES ($1, $2, $3, NOW())`,
+                         [user_id, game_id, party_id]
+        );
+      }
+    } else {
+      // 4. Normal solo borrow
+      await pool.query(
+        `INSERT INTO game_history (user_id, game_id, borrowed_at)
+        VALUES ($1, $2, NOW())`,
+                       [user_id, game_id]
+      );
+    }
+
+    // 5. Respond with both order and party session info
+    res.status(200).json({
+      success: true,
+      order_id: game_order_id,
+      party_session_id: partySessionId
+    });
+
   } catch (err) {
-    console.error('❌ Error inserting order:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ Error in /order-game:', err);
+    res.status(500).json({ error: 'Failed to process game order' });
   }
 });
 
-app.get('/order-game/latest', async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM game_orders ORDER BY created_at DESC LIMIT 20'
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error('Error fetching orders:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+
 
 app.delete('/friends/remove/:id', verifyToken, async (req, res) => {
   const myId = req.user.id;
@@ -1247,6 +1316,42 @@ app.post('/party-session', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to create session' });
   }
 });
+
+app.get('/party/:id/sessions', verifyToken, async (req, res) => {
+  const partyId = req.params.id;
+
+  try {
+    const activeResult = await pool.query(
+      `SELECT ps.*, g.title_en AS game_title, u.first_name, u.last_name
+      FROM party_sessions ps
+      JOIN games g ON ps.game_id = g.id
+      JOIN users u ON ps.user_id = u.id
+      WHERE ps.party_id = $1 AND ps.ended_at IS NULL
+      ORDER BY ps.started_at DESC
+      LIMIT 1`,
+      [partyId]
+    );
+
+    const pastResult = await pool.query(
+      `SELECT ps.*, g.title_en AS game_title, u.first_name, u.last_name
+      FROM party_sessions ps
+      JOIN games g ON ps.game_id = g.id
+      JOIN users u ON ps.user_id = u.id
+      WHERE ps.party_id = $1 AND ps.ended_at IS NOT NULL
+      ORDER BY ps.ended_at DESC`,
+      [partyId]
+    );
+
+    res.json({
+      active: activeResult.rows[0] || null,
+      past: pastResult.rows || []
+    });
+  } catch (err) {
+    console.error('❌ Error fetching party sessions:', err);
+    res.status(500).json({ error: 'Failed to fetch party sessions' });
+  }
+});
+
 
 
 app.post('/party-session/:id/round', verifyToken, async (req, res) => {
