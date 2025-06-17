@@ -1325,7 +1325,7 @@ app.get('/party/:id/sessions', verifyToken, async (req, res) => {
       `SELECT ps.*, g.title_en AS game_title, u.first_name, u.last_name
       FROM party_sessions ps
       JOIN games g ON ps.game_id = g.id
-      JOIN users u ON ps.user_id = u.id
+      JOIN users u ON ps.created_by = u.id
       WHERE ps.party_id = $1 AND ps.ended_at IS NULL
       ORDER BY ps.started_at DESC
       LIMIT 1`,
@@ -1336,7 +1336,7 @@ app.get('/party/:id/sessions', verifyToken, async (req, res) => {
       `SELECT ps.*, g.title_en AS game_title, u.first_name, u.last_name
       FROM party_sessions ps
       JOIN games g ON ps.game_id = g.id
-      JOIN users u ON ps.user_id = u.id
+      JOIN users u ON ps.created_by = u.id
       WHERE ps.party_id = $1 AND ps.ended_at IS NOT NULL
       ORDER BY ps.ended_at DESC`,
       [partyId]
@@ -1351,6 +1351,7 @@ app.get('/party/:id/sessions', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch party sessions' });
   }
 });
+
 
 
 
