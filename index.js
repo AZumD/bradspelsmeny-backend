@@ -224,6 +224,22 @@ app.get('/games/slug/:slug', async (req, res) => {
 
 
 
+app.get('/games/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query('SELECT * FROM games WHERE id = $1', [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Failed to fetch game by ID:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 
 
