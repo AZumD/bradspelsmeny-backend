@@ -166,47 +166,83 @@ app.post('/games', verifyToken, upload.none(), async (req, res) => {
 app.put('/games/:id', verifyToken, upload.none(), async (req, res) => {
   const { id } = req.params;
   const {
-    title_sv, title_en, description_sv, description_en,
-    min_players, max_players, play_time,
-    age, tags, img,
-    slow_day_only, trusted_only, members_only,
-    condition_rating, staff_picks, min_table_size
+    title_sv,
+    title_en,
+    description_sv,
+    description_en,
+    min_players,
+    max_players,
+    play_time,
+    age,
+    tags,
+    img,
+    slow_day_only,
+    trusted_only,
+    members_only,
+    condition_rating,
+    staff_picks,
+    min_table_size
   } = req.body;
 
   const parseBoolean = (val) => {
     if (typeof val === 'boolean') return val;
     if (typeof val === 'string') return val.toLowerCase() === 'true';
     return false;
-  }
-
-  const slow_day_only_bool = parseBoolean(slow_day_only);
-  const trusted_only_bool = parseBoolean(trusted_only);
-  const members_only_bool = parseBoolean(members_only);
+  };
 
   try {
     const result = await pool.query(
       `UPDATE games SET
-      title_sv=$1, title_en=$2, description_sv=$3, description_en=$4,
-      min_players=$5, max_players=$6, play_time=$7,
-      age=$8, tags=$9, img=$10,
-      slow_day_only=$11, trusted_only=$12, members_only=$13,
-      condition_rating=$14, staff_picks=$15, min_table_size=$16
-      WHERE id=$17 RETURNING *`,
+      title_sv = $1,
+      title_en = $2,
+      description_sv = $3,
+      description_en = $4,
+      min_players = $5,
+      max_players = $6,
+      play_time = $7,
+      age = $8,
+      tags = $9,
+      img = $10,
+      slow_day_only = $11,
+      trusted_only = $12,
+      members_only = $13,
+      condition_rating = $14,
+      staff_picks = $15,
+      min_table_size = $16
+      WHERE id = $17
+      RETURNING *`,
       [
-        title_sv, title_en, description_sv, description_en,
-        min_players, max_players, play_time,
-        age, tags, img,
-        slow_day_only_bool, trusted_only_bool, members_only_bool,
-        condition_rating || null, staff_picks || null, min_table_size || null,
-        id
+        title_sv,
+        title_en,
+        description_sv,
+        description_en,
+        min_players,
+        max_players,
+        play_time,
+        age,
+        tags,
+        img,
+        parseBoolean(slow_day_only),
+                                    parseBoolean(trusted_only),
+                                    parseBoolean(members_only),
+                                    condition_rating || null,
+                                    staff_picks || null,
+                                    min_table_size || null,
+                                    id
       ]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error('❌ Failed to update game:', err);
     res.status(500).json({ error: 'Failed to update game' });
   }
 });
+
 
 app.get('/games/slug/:slug', async (req, res) => {
   const { slug } = req.params;
