@@ -1422,38 +1422,25 @@ app.get('/users/:id', verifyToken, async (req, res) => {
 app.put('/users/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
 
-  // Only owner or admin can update
+  // Only the owner or an admin can update the profile
   if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
   const {
+    username,
     first_name,
     last_name,
     phone,
     email,
     bio,
-    membership_status // Optional: Only allow admin to update this?
+    membership_status // only applied if admin
   } = req.body;
 
-  // Optional: Add validation for email format, membership_status values here
+  // Only admins are allowed to update membership_status
+  const membershipStatusToSet = (req.user.role === 'admin' && membership_status) ? membership_status : undefined;
 
   try {
-    // For membership_status, only admin can update it, else keep existing
-    const membershipStatusToSet = (req.user.role === 'admin' && membership_status) ? membership_status : undefined;
-
-    const {
-      username,
-      first_name,
-      last_name,
-      phone,
-      email,
-      bio,
-      membership_status // Optional: Only allow admin to update this?
-    } = req.body;
-
-    // ...
-
     const result = await pool.query(
       `UPDATE users SET
       username = COALESCE($1, username),
@@ -1488,6 +1475,7 @@ app.put('/users/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to update user profile' });
   }
 });
+
 
 
 
