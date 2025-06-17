@@ -711,6 +711,23 @@ app.get('/users/:id/friends', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/users/:id/parties', verifyToken, async (req, res) => {
+  const userId = req.params.id;
+  try {
+    const result = await pool.query(
+      `SELECT p.*
+      FROM parties p
+      JOIN party_members pm ON p.id = pm.party_id
+      WHERE pm.user_id = $1`,
+      [userId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching parties for user:', err);
+    res.status(500).send('Server error');
+  }
+});
+
 // In your Express backend (for dev only)
 app.post('/notifications/test', verifyToken, async (req, res) => {
   const userId = req.user.id;
