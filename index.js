@@ -604,7 +604,12 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
 
   try {
     // Fetch the order by id
-    const orderRes = await pool.query('SELECT * FROM game_orders WHERE id = $1', [id]);
+    const orderRes = await pool.query(`
+    SELECT go.*, u.first_name, u.last_name, u.phone
+    FROM game_orders go
+    JOIN users u ON go.user_id = u.id
+    WHERE go.id = $1
+    `, [id]);
     const order = orderRes.rows[0];
     console.log('Processing order:', order);
 
