@@ -388,13 +388,13 @@ app.post('/return/:id', verifyToken, async (req, res) => {
     WHERE id = $1
     `, [id]);
 
-    // 2. System-level return log
+    // 2. System-level return log (avoid reserved keyword 'timestamp')
     await pool.query(`
-    INSERT INTO game_history (game_id, action, returned_at, timestamp)
-    VALUES ($1, 'return', NOW(), NOW())
+    INSERT INTO game_history (game_id, action, returned_at)
+    VALUES ($1, 'return', NOW())
     `, [id]);
 
-    // 3. Update any active party session with end time and metadata
+    // 3. Update any active party session
     await pool.query(`
     UPDATE party_sessions
     SET returned_at = NOW(),
@@ -409,6 +409,7 @@ app.post('/return/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to return game' });
   }
 });
+
 
 
 
