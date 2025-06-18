@@ -576,7 +576,7 @@ app.get('/order-game/latest', verifyToken, async (req, res) => {
     }
 
     const result = await pool.query(`
-    SELECT go.id, go.game_id, go.game_title, go.table_id, go.created_at,
+    SELECT go.id, go.game_id, go.table_id, go.created_at,
     u.first_name, u.last_name, u.phone
     FROM game_orders go
     JOIN users u ON go.user_id = u.id
@@ -590,6 +590,7 @@ app.get('/order-game/latest', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch game orders' });
   }
 });
+
 
 
 
