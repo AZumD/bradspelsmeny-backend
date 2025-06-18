@@ -483,7 +483,7 @@ app.get('/stats/most-lent-this-month', verifyToken, async (req, res) => {
 });
 
 app.post('/order-game', async (req, res) => {
-  const { first_name, last_name, phone, table_number, game_id, game_title, party_id } = req.body;
+  const { first_name, last_name, phone, table_id, game_id, game_title, party_id } = req.body;
 
   try {
     // 1. Check if user already exists
@@ -500,12 +500,12 @@ app.post('/order-game', async (req, res) => {
       user_id = insertUserResult.rows[0].id;
     }
 
-    // 2. Create game order (including title and table_number)
+    // 2. Create game order (corrected: using table_id)
     const orderResult = await pool.query(
       `INSERT INTO game_orders (user_id, game_id, game_title, table_id, created_at)
       VALUES ($1, $2, $3, $4, NOW())
       RETURNING id`,
-      [user_id, game_id, game_title, table_number]
+      [user_id, game_id, game_title, table_id]
     );
     const game_order_id = orderResult.rows[0].id;
 
@@ -513,7 +513,7 @@ app.post('/order-game', async (req, res) => {
 
     // 3. Handle party logic
     if (party_id) {
-      // 3a. Create party session using created_by instead of user_id
+      // 3a. Create party session using created_by
       const partySessionResult = await pool.query(
         `INSERT INTO party_sessions (party_id, game_id, created_by, started_at)
         VALUES ($1, $2, $3, NOW())
@@ -547,7 +547,7 @@ app.post('/order-game', async (req, res) => {
         );
       }
     } else {
-      // 4. Normal solo borrow
+      // 4. Solo borrow
       await pool.query(
         `INSERT INTO game_history (user_id, game_id, borrowed_at)
         VALUES ($1, $2, NOW())`,
@@ -555,7 +555,7 @@ app.post('/order-game', async (req, res) => {
       );
     }
 
-    // 5. Respond with both order and party session info
+    // 5. Respond
     res.status(200).json({
       success: true,
       order_id: game_order_id,
@@ -567,6 +567,7 @@ app.post('/order-game', async (req, res) => {
     res.status(500).json({ error: 'Failed to process game order' });
   }
 });
+
 
 
 
