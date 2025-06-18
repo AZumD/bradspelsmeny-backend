@@ -532,7 +532,7 @@ app.post('/order-game', async (req, res) => {
       // 3c. Log game for each member
       for (const memberId of partyMembers) {
         await pool.query(
-          `INSERT INTO game_history (user_id, game_id, party_id, borrowed_at)
+          `INSERT INTO game_history (user_id, game_id, party_id, timestamp)
           VALUES ($1, $2, $3, NOW())`,
                          [memberId, game_id, party_id]
         );
@@ -541,7 +541,7 @@ app.post('/order-game', async (req, res) => {
       // 3d. Add main user if not included
       if (!partyMembers.includes(user_id)) {
         await pool.query(
-          `INSERT INTO game_history (user_id, game_id, party_id, borrowed_at)
+          `INSERT INTO game_history (user_id, game_id, party_id, timestamp)
           VALUES ($1, $2, $3, NOW())`,
                          [user_id, game_id, party_id]
         );
@@ -549,7 +549,7 @@ app.post('/order-game', async (req, res) => {
     } else {
       // 4. Solo borrow
       await pool.query(
-        `INSERT INTO game_history (user_id, game_id, borrowed_at)
+        `INSERT INTO game_history (user_id, game_id, timestamp)
         VALUES ($1, $2, NOW())`,
                        [user_id, game_id]
       );
