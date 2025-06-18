@@ -574,7 +574,7 @@ app.get('/order-game/latest', verifyToken, async (req, res) => {
     SELECT
     go.id, go.table_id, go.created_at,
     u.first_name, u.last_name, u.phone,
-    g.title AS game_title
+    g.title_en AS game_title
     FROM game_orders go
     JOIN users u ON go.user_id = u.id
     LEFT JOIN games g ON go.game_id::int = g.id
@@ -588,6 +588,7 @@ app.get('/order-game/latest', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to load game orders' });
   }
 });
+
 
 
 
