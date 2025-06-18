@@ -397,10 +397,10 @@ app.post('/return/:id', verifyToken, async (req, res) => {
     // 3. Update any active party session with end time and metadata
     await pool.query(`
     UPDATE party_sessions
-    SET ended_at = NOW(),
+    SET returned_at = NOW(),
                      returned_by_user_id = $1,
                      return_notes = $2
-                     WHERE game_id = $3 AND ended_at IS NULL
+                     WHERE game_id = $3 AND returned_at IS NULL
                      `, [returnedByUserId, return_notes || null, id]);
 
     res.json({ message: '✅ Game returned' });
