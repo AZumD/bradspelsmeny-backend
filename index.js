@@ -531,11 +531,10 @@ app.post('/order-game', async (req, res) => {
 
       // 3c. Log game for each member
       for (const memberId of partyMembers) {
-        await pool.query(`
-        INSERT INTO game_history (game_id, user_id, action, note, table_id)
-        VALUES ($1, $2, 'lend', $3, $4)
-        `, [order.game_id, userId, `Auto-lend via order system (Table ${order.table_id})`, order.table_id]);
-
+        await pool.query(
+          `INSERT INTO game_history (user_id, game_id, party_id, borrowed_at)
+          VALUES ($1, $2, $3, NOW())`,
+                         [memberId, game_id, party_id]
         );
       }
 
@@ -601,16 +600,12 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
     console.log('Processing order:', order);
 
     if (!order) return res.status(404).json({ error: "Order not found" });
-    // Standardize phone number by removing non-digits
 
-        const standardizedPhone = order.phone.replace(/\D/g, '');
-    // Add your validation here:
+    const standardizedPhone = order.phone.replace(/\D/g, '');
+
     if (!order.first_name || !order.last_name || !standardizedPhone) {
       return res.status(400).json({ error: 'Order missing user info' });
     }
-
-
-
 
     // Check if user exists with that phone
     const existingUserRes = await pool.query(
@@ -620,20 +615,17 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
 
     let userId;
     if (existingUserRes.rows.length > 0) {
-      // Use existing user ID
       userId = existingUserRes.rows[0].id;
     } else {
-      // Create new user and get new ID
       const newUserRes = await pool.query(
         `INSERT INTO users (first_name, last_name, phone, membership_status)
         VALUES ($1, $2, $3, 'guest') RETURNING id`,
                                           [order.first_name, order.last_name, standardizedPhone]
       );
-
       userId = newUserRes.rows[0].id;
     }
 
-    // Mark game as lent out and update stats
+    // Mark game as lent out
     await pool.query(`
     UPDATE games
     SET lent_out = true,
@@ -642,11 +634,16 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
                      WHERE id = $1
                      `, [order.game_id]);
 
-    // Insert a lending record in game_history
+    // Insert lending record in game_history (✅ now includes table_id)
     await pool.query(`
-    INSERT INTO game_history (game_id, user_id, action, note)
-    VALUES ($1, $2, 'lend', $3)
-    `, [order.game_id, userId, `Auto-lend via order system (Table ${order.table_id})`]);
+    INSERT INTO game_history (game_id, user_id, action, note, table_id)
+    VALUES ($1, $2, 'lend', $3, $4)
+    `, [
+      order.game_id,
+      userId,
+      `Auto-lend via order system (Table ${order.table_id})`,
+                     order.table_id
+    ]);
 
     // Delete the processed order
     await pool.query('DELETE FROM game_orders WHERE id = $1', [id]);
@@ -657,6 +654,7 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
     res.status(500).json({ error: "Failed to complete order" });
   }
 });
+
 
 // Get friend list of logged-in user
 app.get('/friends', verifyToken, async (req, res) => {
