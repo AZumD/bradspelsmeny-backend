@@ -531,10 +531,11 @@ app.post('/order-game', async (req, res) => {
 
       // 3c. Log game for each member
       for (const memberId of partyMembers) {
-        await pool.query(
-          `INSERT INTO game_history (user_id, game_id, party_id, borrowed_at)
-          VALUES ($1, $2, $3, NOW())`,
-                         [memberId, game_id, party_id]
+        await pool.query(`
+        INSERT INTO game_history (game_id, user_id, action, note, table_id)
+        VALUES ($1, $2, 'lend', $3, $4)
+        `, [order.game_id, userId, `Auto-lend via order system (Table ${order.table_id})`, order.table_id]);
+
         );
       }
 
