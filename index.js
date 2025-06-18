@@ -568,29 +568,27 @@ app.post('/order-game', async (req, res) => {
   }
 });
 
-
 app.get('/order-game/latest', verifyToken, async (req, res) => {
   try {
-    // Verify admin access
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
     const result = await pool.query(`
-    SELECT go.id, go.game_id, go.table_id, go.created_at,
-    u.first_name, u.last_name, u.phone
+    SELECT
+    go.id, go.table_id, go.created_at,
+    u.first_name, u.last_name, u.phone,
+    g.title AS game_title
     FROM game_orders go
     JOIN users u ON go.user_id = u.id
+    JOIN games g ON go.game_id = g.id
     ORDER BY go.created_at DESC
-    LIMIT 10
+    LIMIT 50
     `);
 
     res.json(result.rows);
   } catch (err) {
-    console.error('❌ Failed to fetch latest game orders:', err);
-    res.status(500).json({ error: 'Failed to fetch game orders' });
+    console.error('❌ Failed to fetch game orders:', err);
+    res.status(500).json({ error: 'Failed to load game orders' });
   }
 });
+
 
 
 
@@ -671,6 +669,17 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
   }
 });
 
+app.delete('/order-game/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await pool.query('DELETE FROM game_orders WHERE id = $1', [id]);
+    res.json({ message: '✅ Game order deleted' });
+  } catch (err) {
+    console.error('❌ Failed to delete game order:', err);
+    res.status(500).json({ error: 'Failed to delete game order' });
+  }
+});
 
 
 // Get friend list of logged-in user
