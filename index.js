@@ -568,6 +568,28 @@ app.post('/order-game', async (req, res) => {
   }
 });
 
+app.get('/order-game/latest', verifyToken, async (req, res) => {
+  try {
+    // Verify admin access
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const result = await pool.query(`
+    SELECT go.id, go.game_id, go.game_title, go.table_id, go.created_at,
+    u.first_name, u.last_name, u.phone
+    FROM game_orders go
+    JOIN users u ON go.user_id = u.id
+    ORDER BY go.created_at DESC
+    LIMIT 10
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Failed to fetch latest game orders:', err);
+    res.status(500).json({ error: 'Failed to fetch game orders' });
+  }
+});
 
 
 
