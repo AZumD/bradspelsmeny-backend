@@ -610,7 +610,8 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
 
     if (!order) return res.status(404).json({ error: "Order not found" });
 
-    const standardizedPhone = order.phone.replace(/\D/g, '');
+    const standardizedPhone = order.phone ? order.phone.replace(/\D/g, '') : null;
+
 
     if (!order.first_name || !order.last_name || !standardizedPhone) {
       return res.status(400).json({ error: 'Order missing user info' });
