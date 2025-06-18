@@ -483,7 +483,7 @@ app.get('/stats/most-lent-this-month', verifyToken, async (req, res) => {
 });
 
 app.post('/order-game', async (req, res) => {
-  const { first_name, last_name, phone, table_number, game_id, party_id } = req.body;
+  const { first_name, last_name, phone, table_id, game_id, party_id } = req.body;
 
   try {
     // 1. Check if user already exists
@@ -502,10 +502,10 @@ app.post('/order-game', async (req, res) => {
 
     // 2. Create game order
     const orderResult = await pool.query(
-      `INSERT INTO game_orders (user_id, game_id, table_number, created_at)
+      `INSERT INTO game_orders (user_id, game_id, table_id, created_at)
       VALUES ($1, $2, $3, NOW())
       RETURNING id`,
-      [user_id, game_id, table_number]
+      [user_id, game_id, table_id]
     );
     const game_order_id = orderResult.rows[0].id;
 
@@ -515,7 +515,7 @@ app.post('/order-game', async (req, res) => {
     if (party_id) {
       // 3a. Create party session
       const partySessionResult = await pool.query(
-        `INSERT INTO party_sessions (party_id, game_id, user_id, started_at)
+        `INSERT INTO party_sessions (party_id, game_id, created_by, started_at)
         VALUES ($1, $2, $3, NOW())
         RETURNING id`,
         [party_id, game_id, user_id]
@@ -568,25 +568,6 @@ app.post('/order-game', async (req, res) => {
   }
 });
 
-
-
-app.delete('/friends/remove/:id', verifyToken, async (req, res) => {
-  const myId = req.user.id;
-  const friendId = parseInt(req.params.id);
-
-  try {
-    await pool.query(`
-    DELETE FROM friends
-    WHERE (user_id = $1 AND friend_id = $2)
-    OR (user_id = $2 AND friend_id = $1)
-    `, [myId, friendId]);
-
-    res.status(200).json({ message: 'Friend removed' }); // ✅ Proper response
-  } catch (err) {
-    console.error('❌ Error removing friend:', err);
-    res.status(500).json({ error: 'Failed to remove friend' });
-  }
-});
 
 // COMPLETE ORDER: create user if not exists, then lend out game
 
