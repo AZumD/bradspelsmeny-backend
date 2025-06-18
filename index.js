@@ -505,7 +505,7 @@ app.post('/order-game', async (req, res) => {
       `INSERT INTO game_orders (user_id, game_id, table_id, created_at)
       VALUES ($1, $2, $3, NOW())
       RETURNING id`,
-      [user_id, game_id, game_title, table_id]
+      [user_id, game_id, table_id]
     );
     const game_order_id = orderResult.rows[0].id;
 
@@ -567,6 +567,7 @@ app.post('/order-game', async (req, res) => {
     res.status(500).json({ error: 'Failed to process game order' });
   }
 });
+
 
 app.get('/order-game/latest', verifyToken, async (req, res) => {
   try {
@@ -669,6 +670,7 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
     res.status(500).json({ error: "Failed to complete order" });
   }
 });
+
 
 
 // Get friend list of logged-in user
