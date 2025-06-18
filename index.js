@@ -500,7 +500,7 @@ app.post('/order-game', async (req, res) => {
       user_id = insertUserResult.rows[0].id;
     }
 
-    // 2. Create game order (corrected: using table_id)
+    // 2. Create game order
     const orderResult = await pool.query(
       `INSERT INTO game_orders (user_id, game_id, game_title, table_id, created_at)
       VALUES ($1, $2, $3, $4, NOW())
@@ -532,8 +532,8 @@ app.post('/order-game', async (req, res) => {
       // 3c. Log game for each member
       for (const memberId of partyMembers) {
         await pool.query(
-          `INSERT INTO game_history (user_id, game_id, party_id, timestamp)
-          VALUES ($1, $2, $3, NOW())`,
+          `INSERT INTO game_history (user_id, game_id, party_id, action, borrowed_at, timestamp)
+          VALUES ($1, $2, $3, 'borrow', NOW(), NOW())`,
                          [memberId, game_id, party_id]
         );
       }
@@ -541,16 +541,16 @@ app.post('/order-game', async (req, res) => {
       // 3d. Add main user if not included
       if (!partyMembers.includes(user_id)) {
         await pool.query(
-          `INSERT INTO game_history (user_id, game_id, party_id, timestamp)
-          VALUES ($1, $2, $3, NOW())`,
+          `INSERT INTO game_history (user_id, game_id, party_id, action, borrowed_at, timestamp)
+          VALUES ($1, $2, $3, 'borrow', NOW(), NOW())`,
                          [user_id, game_id, party_id]
         );
       }
     } else {
       // 4. Solo borrow
       await pool.query(
-        `INSERT INTO game_history (user_id, game_id, timestamp)
-        VALUES ($1, $2, NOW())`,
+        `INSERT INTO game_history (user_id, game_id, action, borrowed_at, timestamp)
+        VALUES ($1, $2, 'borrow', NOW(), NOW())`,
                        [user_id, game_id]
       );
     }
@@ -567,6 +567,7 @@ app.post('/order-game', async (req, res) => {
     res.status(500).json({ error: 'Failed to process game order' });
   }
 });
+
 
 
 
