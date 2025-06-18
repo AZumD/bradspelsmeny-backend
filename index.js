@@ -1310,7 +1310,7 @@ app.get('/party/:id/sessions', verifyToken, async (req, res) => {
       FROM party_sessions ps
       JOIN games g ON ps.game_id = g.id
       JOIN users u ON ps.created_by = u.id
-      WHERE ps.party_id = $1 AND ps.ended_at IS NULL
+      WHERE ps.party_id = $1 AND ps.returned_at IS NULL
       ORDER BY ps.started_at DESC
       LIMIT 1`,
       [partyId]
@@ -1321,8 +1321,8 @@ app.get('/party/:id/sessions', verifyToken, async (req, res) => {
       FROM party_sessions ps
       JOIN games g ON ps.game_id = g.id
       JOIN users u ON ps.created_by = u.id
-      WHERE ps.party_id = $1 AND ps.ended_at IS NOT NULL
-      ORDER BY ps.ended_at DESC`,
+      WHERE ps.party_id = $1 AND ps.returned_at IS NOT NULL
+      ORDER BY ps.returned_at DESC`,
       [partyId]
     );
 
