@@ -483,7 +483,7 @@ app.get('/stats/most-lent-this-month', verifyToken, async (req, res) => {
 });
 
 app.post('/order-game', async (req, res) => {
-  const { first_name, last_name, phone, table_id, game_id, game_title, party_id } = req.body;
+  const { first_name, last_name, phone, table_number, game_id, game_title, party_id } = req.body;
 
   try {
     // 1. Check if user already exists
@@ -500,12 +500,12 @@ app.post('/order-game', async (req, res) => {
       user_id = insertUserResult.rows[0].id;
     }
 
-    // 2. Create game order (✅ now includes game_title)
+    // 2. Create game order (including title and table_number)
     const orderResult = await pool.query(
-      `INSERT INTO game_orders (user_id, game_id, game_title, table_id, created_at)
+      `INSERT INTO game_orders (user_id, game_id, game_title, table_number, created_at)
       VALUES ($1, $2, $3, $4, NOW())
       RETURNING id`,
-      [user_id, game_id, game_title, table_id]
+      [user_id, game_id, game_title, table_number]
     );
     const game_order_id = orderResult.rows[0].id;
 
@@ -513,9 +513,9 @@ app.post('/order-game', async (req, res) => {
 
     // 3. Handle party logic
     if (party_id) {
-      // 3a. Create party session
+      // 3a. Create party session using created_by instead of user_id
       const partySessionResult = await pool.query(
-        `INSERT INTO party_sessions (party_id, game_id, user_id, started_at)
+        `INSERT INTO party_sessions (party_id, game_id, created_by, started_at)
         VALUES ($1, $2, $3, NOW())
         RETURNING id`,
         [party_id, game_id, user_id]
@@ -567,6 +567,7 @@ app.post('/order-game', async (req, res) => {
     res.status(500).json({ error: 'Failed to process game order' });
   }
 });
+
 
 
 
