@@ -502,7 +502,7 @@ app.post('/order-game', async (req, res) => {
 
     // 2. Create game order (including title and table_number)
     const orderResult = await pool.query(
-      `INSERT INTO game_orders (user_id, game_id, game_title, table_number, created_at)
+      `INSERT INTO game_orders (user_id, game_id, game_title, table_id, created_at)
       VALUES ($1, $2, $3, $4, NOW())
       RETURNING id`,
       [user_id, game_id, game_title, table_number]
