@@ -533,16 +533,16 @@ app.post('/order-game', async (req, res) => {
       for (const memberId of partyMembers) {
         await pool.query(
           `INSERT INTO game_history (user_id, game_id, party_id, action, timestamp)
-          VALUES ($1, $2, $3, 'borrow', NOW(), NOW())`,
+          VALUES ($1, $2, $3, 'borrow', NOW())`,
                          [memberId, game_id, party_id]
         );
       }
 
-      // 3d. Add main user if not included
+      // 3d. Add main user if not already included
       if (!partyMembers.includes(user_id)) {
         await pool.query(
-          `INSERT INTO game_history (user_id, game_id, party_id, action,timestamp)
-          VALUES ($1, $2, $3, 'borrow', NOW(), NOW())`,
+          `INSERT INTO game_history (user_id, game_id, party_id, action, timestamp)
+          VALUES ($1, $2, $3, 'borrow', NOW())`,
                          [user_id, game_id, party_id]
         );
       }
@@ -550,7 +550,7 @@ app.post('/order-game', async (req, res) => {
       // 4. Solo borrow
       await pool.query(
         `INSERT INTO game_history (user_id, game_id, action, timestamp)
-        VALUES ($1, $2, 'borrow', NOW(), NOW())`,
+        VALUES ($1, $2, 'borrow', NOW())`,
                        [user_id, game_id]
       );
     }
@@ -567,6 +567,7 @@ app.post('/order-game', async (req, res) => {
     res.status(500).json({ error: 'Failed to process game order' });
   }
 });
+
 
 
 
