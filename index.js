@@ -502,12 +502,11 @@ app.post('/order-game', async (req, res) => {
 
     // 2. Create game order
     const orderResult = await pool.query(
-      await pool.query(
-        `INSERT INTO game_orders (user_id, game_id, table_id, created_at)
-        VALUES ($1, $2, $3, NOW())
-        RETURNING id`,
-        [user_id, game_id, table_id]
-      );
+      `INSERT INTO game_orders (user_id, game_id, table_id, created_at)
+      VALUES ($1, $2, $3, NOW())
+      RETURNING id`,
+      [user_id, game_id, game_title, table_id]
+    );
     const game_order_id = orderResult.rows[0].id;
 
     let partySessionId = null;
