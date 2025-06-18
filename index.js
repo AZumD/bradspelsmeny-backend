@@ -668,6 +668,34 @@ app.post('/order-game/:id/complete', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/order-game/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+    SELECT
+    go.*,
+    u.first_name,
+    u.last_name,
+    u.phone,
+    u.id AS user_id
+    FROM game_orders go
+    JOIN users u ON go.user_id = u.id
+    WHERE go.id = $1
+    `, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("❌ Failed to fetch order:", err);
+    res.status(500).json({ error: "Failed to fetch order" });
+  }
+});
+
+
 app.delete('/order-game/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
 
