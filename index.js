@@ -1456,6 +1456,30 @@ app.get('/party/:id/all-sessions', verifyToken, async (req, res) => {
 });
 
 
+app.get('/party-sessions/active/:party_id', verifyToken, async (req, res) => {
+  const { party_id } = req.params;
+
+  try {
+    const result = await pool.query(`
+      SELECT game_id, game_title, started_at
+      FROM party_sessions
+      WHERE party_id = $1
+        AND returned_at IS NULL
+      ORDER BY started_at DESC
+      LIMIT 1
+    `, [party_id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No active session found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Error fetching active party session:', err);
+    res.status(500).json({ error: 'Failed to fetch active party session' });
+  }
+});
+
 app.get('/party-session/:id/rounds', verifyToken, async (req, res) => {
   const { id } = req.params;
 
@@ -1474,8 +1498,6 @@ app.get('/party-session/:id/rounds', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch rounds' });
   }
 });
-
-
 
 app.get('/party/:id/messages', verifyToken, async (req, res) => {
   const partyId = parseInt(req.params.id);

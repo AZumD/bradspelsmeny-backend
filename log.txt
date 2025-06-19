@@ -144,4 +144,74 @@ Based on the INSERT and UPDATE queries found in the codebase, the party_sessions
 - Database queries now use correct column names
 - Session tracking will work properly without schema errors
 - Maintains compatibility with existing party_sessions table structure
-- Enhanced return tracking with user and notes information 
+- Enhanced return tracking with user and notes information
+
+## Date: 2024-12-19
+
+### Missing Frontend Route: GET /party-sessions/active/:party_id
+
+**File:** `index.js`  
+**Lines:** 1460-1480
+
+**Issue Identified:**
+- Frontend was calling `GET /party-sessions/active/:party_id` but the route was missing
+- This route is needed for the party profile page to display currently active sessions
+
+**Changes Made:**
+1. **Added Missing Route:**
+   ```javascript
+   app.get('/party-sessions/active/:party_id', verifyToken, async (req, res) => {
+     const { party_id } = req.params;
+   
+     try {
+       const result = await pool.query(`
+         SELECT game_id, game_title, started_at
+         FROM party_sessions
+         WHERE party_id = $1
+           AND returned_at IS NULL
+         ORDER BY started_at DESC
+         LIMIT 1
+       `, [party_id]);
+   
+       if (result.rows.length === 0) {
+         return res.status(404).json({ error: 'No active session found' });
+       }
+   
+       res.json(result.rows[0]);
+     } catch (err) {
+       console.error('❌ Error fetching active party session:', err);
+       res.status(500).json({ error: 'Failed to fetch active party session' });
+     }
+   });
+   ```
+
+2. **Restored Missing Route:**
+   - Also restored the accidentally removed `GET /party-session/:id/rounds` route
+   - This route is needed for fetching session rounds data
+
+**Route Behavior:**
+- Returns the most recent active session for the given party
+- A session is active if: `returned_at IS NULL`
+- Only returns one row — if multiple exist, returns the latest one
+- Returns 404 if no active session is found
+
+**Expected Response Format:**
+```json
+{
+  "game_id": 12,
+  "game_title": "Azul",
+  "started_at": "2025-06-19T13:45:00.000Z"
+}
+```
+
+**Requirements Met:**
+✅ Added missing frontend route for active party sessions  
+✅ Returns correct data format for party profile page  
+✅ Proper error handling for no active sessions  
+✅ Restored accidentally removed rounds route  
+✅ Maintains consistency with existing session tracking  
+
+**Impact:**
+- Frontend party profile page can now display currently active sessions
+- Complete session tracking functionality is now available
+- All missing routes have been restored and implemented 
