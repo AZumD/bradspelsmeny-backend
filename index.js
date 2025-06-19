@@ -57,13 +57,6 @@ app.get('/', (req, res) => {
   res.send('🎲 Board Game Backend API is running.');
 });
 
-// ... [REMAINDER OF FILE UNCHANGED]
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
-});
-
-module.exports = { verifyToken };
 
 
 // 🧑‍💼 User Registration
