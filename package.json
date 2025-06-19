@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "keywords": [],
   "author": "",
@@ -28,5 +28,9 @@
     "url": "https://github.com/AZumD/bradspelsmeny-backend/issues"
   },
   "homepage": "https://github.com/AZumD/bradspelsmeny-backend#readme",
-  "description": ""
+  "description": "",
+  "devDependencies": {
+    "jest": "^30.0.1",
+    "supertest": "^7.1.1"
+  }
 }
