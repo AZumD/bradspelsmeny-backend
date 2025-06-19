@@ -248,3 +248,31 @@ Note: These changes ensure that:
 - Admins have full access to all party and game data
 - Regular users can only access parties they're members of
 - The games list is admin-only (public games still available via /games/public) 
+
+## Date: 2024-03-21
+
+### Verified Party Session Column Names
+
+**Issue Identified:**
+- Concern about incorrect column name usage (`ended_at` vs `returned_at`) in party session routes
+- Specifically `/party-sessions/active/:partyId` and `/party-sessions/history/:partyId`
+
+**Investigation Results:**
+1. `/party-sessions/active/:partyId`:
+   - Already using correct column name `returned_at`
+   - Query: `WHERE party_id = $1 AND returned_at IS NULL`
+   - No changes needed
+
+2. `/party-sessions/history/:partyId`:
+   - Route doesn't exist in codebase
+   - Similar functionality provided by:
+     - `/party/:id/sessions` (active + past sessions)
+     - `/party/:id/all-sessions` (all sessions chronologically)
+   - Both routes already use correct `returned_at` column name
+
+**Conclusion:**
+✅ All party session routes use correct `returned_at` column name
+✅ No changes needed to existing routes
+✅ Database schema consistency maintained 
+
+also I'll help fix the column name issue. However, I notice that the /party-sessions/history/:partyId route doesn't actually exist in the codebase. The closest routes we have are /party/:id/sessions and /party/:id/all-sessions. Let me check and fix the active sessions route first
