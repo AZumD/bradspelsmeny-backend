@@ -442,6 +442,12 @@ app.get('/games/:id/current-lend', verifyToken, async (req, res) => {
 });
 
 app.get('/games', verifyToken, async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Forbidden - Admin access required' });
+  }
+
   try {
     const result = await pool.query('SELECT * FROM games ORDER BY title_sv ASC');
     res.json(result.rows);
@@ -1145,15 +1151,29 @@ app.post('/party', verifyToken, async (req, res) => {
 
 app.get('/party/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
+  const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
 
   try {
+    // If user is not admin, check party membership
+    if (!isAdmin) {
+      const memberCheck = await pool.query(
+        'SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      
+      if (memberCheck.rowCount === 0) {
+        return res.status(403).json({ error: 'Forbidden - Must be party member or admin' });
+      }
+    }
+
     const result = await pool.query(`
     SELECT
     p.id,
     p.name,
     p.emoji,
     p.invite_code,
-    p.avatar, -- 👈 Add this line
+    p.avatar,
     p.created_by,
     p.created_at,
     u.first_name AS creator_first_name,
@@ -1501,11 +1521,25 @@ app.get('/party-session/:id/rounds', verifyToken, async (req, res) => {
 
 app.get('/party/:id/messages', verifyToken, async (req, res) => {
   const partyId = parseInt(req.params.id);
+  const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
 
   try {
+    // If user is not admin, check party membership
+    if (!isAdmin) {
+      const memberCheck = await pool.query(
+        'SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2',
+        [partyId, userId]
+      );
+      
+      if (memberCheck.rowCount === 0) {
+        return res.status(403).json({ error: 'Forbidden - Must be party member or admin' });
+      }
+    }
+
     const result = await pool.query(`
     SELECT pm.id, pm.content, pm.created_at,
-    pm.user_id,                    -- 👈 make sure to include this
+    pm.user_id,
     u.username, u.avatar_url
     FROM party_messages pm
     JOIN users u ON pm.user_id = u.id
@@ -1513,8 +1547,6 @@ app.get('/party/:id/messages', verifyToken, async (req, res) => {
     ORDER BY pm.created_at DESC
     LIMIT 100;
     `, [partyId]);
-
-
 
     res.json(result.rows);
   } catch (err) {

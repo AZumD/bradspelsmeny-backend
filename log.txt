@@ -215,3 +215,36 @@ Based on the INSERT and UPDATE queries found in the codebase, the party_sessions
 - Frontend party profile page can now display currently active sessions
 - Complete session tracking functionality is now available
 - All missing routes have been restored and implemented 
+
+🔒 Fixed Permission Issues (2024-03-21)
+
+1. Updated /party/:id route:
+   - Added proper access control
+   - Now checks if user is either:
+     a) an admin (role === 'admin') OR
+     b) a party member
+   - Returns 403 if neither condition is met
+
+2. Updated /party/:id/messages route:
+   - Added proper access control
+   - Same checks as party route:
+     - Admins can access all party messages
+     - Party members can access their party's messages
+   - Returns 403 if unauthorized
+
+3. Updated /games route:
+   - Added admin-only access check
+   - Now requires role === 'admin'
+   - Returns 403 for non-admin users
+
+Impact:
+✅ Admins can now access any party data
+✅ Party members can access their own party data
+✅ Unauthorized access properly blocked with 403
+✅ Consistent error messages across routes
+✅ No more unauthorized data leaks
+
+Note: These changes ensure that:
+- Admins have full access to all party and game data
+- Regular users can only access parties they're members of
+- The games list is admin-only (public games still available via /games/public) 
