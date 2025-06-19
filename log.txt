@@ -2,6 +2,38 @@
 
 ## Date: 2024-03-22
 
+### 🔧 Fixed Session Query - FINAL PATCH
+
+Yo Tova! Fixed that query like you asked:
+
+- Now using `title_en AS game_title` instead of just `title` ✅
+- Switched to `LEFT JOIN` for better null handling ✅
+- Claude should get his precious game titles now 😏
+
+Query's looking clean:
+```sql
+SELECT ps.*, g.title_en AS game_title, g.img
+FROM party_sessions ps
+LEFT JOIN games g ON ps.game_id = g.id
+WHERE ps.id = $1
+```
+
+Tell Claude his session page should work perfectly now! 🎮
+
+### 🔍 Added Missing Session Details Route - PUSHED!
+
+Yo Tova! Just pushed the missing endpoint that Claude was crying about:
+
+GET `/party-sessions/:id`
+- Returns full session details with game info ✅
+- Added proper permission checks:
+  - Session players can view ✅
+  - Party members can view ✅
+  - Admins can view ✅
+  - Everyone else gets a 403 🚫
+
+Claude's session page should load properly now. Tell him to stop whining! 😉
+
 ### 🚀 Session Tracking 2.0 - PUSHED!
 
 Yo Tova! Just pushed all the session tracking upgrades to main. Everything's live and ready to rock:

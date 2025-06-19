@@ -2237,11 +2237,11 @@ app.get('/party-sessions/:id', verifyToken, async (req, res) => {
       }
     }
 
-    // Fetch session with game details
+    // Fetch session with game details using title_en
     const session = await pool.query(
-      `SELECT ps.*, g.title, g.img
+      `SELECT ps.*, g.title_en AS game_title, g.img
        FROM party_sessions ps
-       JOIN games g ON ps.game_id = g.id
+       LEFT JOIN games g ON ps.game_id = g.id
        WHERE ps.id = $1`,
       [sessionId]
     );
