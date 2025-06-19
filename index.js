@@ -1608,6 +1608,18 @@ app.get('/users/:id', verifyToken, async (req, res) => {
 
     let user = result.rows[0];
 
+    // Fetch user's parties
+    const parties = await pool.query(
+      `SELECT p.id, p.name
+       FROM parties p
+       JOIN party_members pm ON pm.party_id = p.id
+       WHERE pm.user_id = $1`,
+      [id]
+    );
+
+    // Attach parties to user object
+    user.parties = parties.rows;
+
     // Hide sensitive info if not owner/admin/friend
     if (!isOwner && !isAdmin && !isFriend) {
       delete user.email;

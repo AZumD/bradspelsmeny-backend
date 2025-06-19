@@ -1,0 +1,40 @@
+# Backend API Changes Log
+
+## Date: 2024-12-19
+
+### Updated GET /users/:id route (Profile endpoint)
+
+**File:** `index.js`  
+**Lines:** 1577-1630
+
+**Changes Made:**
+- Added query to fetch user's parties after fetching user profile data
+- Added parties array to the returned user object
+- Maintained existing functionality for hiding sensitive information
+
+**Specific Changes:**
+1. Added party query after user data fetch:
+   ```sql
+   SELECT p.id, p.name
+   FROM parties p
+   JOIN party_members pm ON pm.party_id = p.id
+   WHERE pm.user_id = $1
+   ```
+
+2. Attached parties to user object:
+   ```javascript
+   user.parties = parties.rows;
+   ```
+
+**Requirements Met:**
+✅ Do not change existing fields in the profile  
+✅ Only add a .parties array to the returned user object  
+✅ Each party contains: id, name  
+✅ Only do this if user is found (avoid null errors)  
+✅ Frontend dropdown will now populate correctly
+
+**Impact:**
+- The GET /users/:id endpoint now returns user profile data with an additional `parties` array
+- Each party in the array contains `id` and `name` fields
+- This enables the frontend to populate party dropdowns correctly
+- No breaking changes to existing functionality 
