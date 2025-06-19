@@ -1424,7 +1424,8 @@ app.post('/party-session/:id/round', verifyToken, async (req, res) => {
 });
 
 
-app.get('/party/:id/sessions', verifyToken, async (req, res) => {
+// Fetch all sessions for a party
+app.get('/party/:id/all-sessions', verifyToken, async (req, res) => {
   const { id } = req.params;
 
   try {
