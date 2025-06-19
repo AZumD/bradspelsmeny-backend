@@ -1,5 +1,83 @@
 # Backend API Changes Log
 
+## Date: 2024-03-22
+
+### 🎲 Session Tracking 2.0: Multiple Winners & Guest Players
+
+Yo Tova! Just pushed some major upgrades to our session tracking system. Here's what's new:
+
+1. Updated `party_session_rounds` table:
+   - Now supports multiple winners per round (winners INT[])
+   - Kept losers array for tracking those L's 😅
+   - Added proper foreign key constraints
+
+2. Added new `session_players` table for tracking who's in each session:
+   ```sql
+   CREATE TABLE session_players (
+     session_id INT REFERENCES party_sessions(id),
+     user_id INT REFERENCES users(id),
+     added_by INT REFERENCES users(id),
+     PRIMARY KEY (session_id, user_id)
+   );
+   ```
+
+3. Added these sweet new routes:
+   - GET `/party-sessions/players/:session_id`
+     → Lists all players in a session (party members + guests)
+   - POST `/party-sessions/add-player`
+     → Lets players invite their friends to join
+   - POST `/party-sessions/round`
+     → Now handles multiple winners/losers per round
+
+4. Enhanced existing stuff:
+   - POST `/party-session` now auto-adds all party members
+   - Added proper permission checks everywhere
+   - Migrated existing round data to new format
+
+Everything's working smooth - tested the migration and all routes. Let me know if you need any tweaks! 🎮
+
+## Date: 2024-03-22
+
+### Enhanced Session Tracking with Multiple Winners & Guest Players
+
+**Changes Made:**
+1. Updated `party_session_rounds` table:
+   - Replaced `winner_id` with `winners INT[]`
+   - Kept `losers INT[]` as is
+   - Added proper foreign key constraints
+
+2. Added new `session_players` table:
+   ```sql
+   CREATE TABLE session_players (
+     session_id INT REFERENCES party_sessions(id),
+     user_id INT REFERENCES users(id),
+     added_by INT REFERENCES users(id),
+     PRIMARY KEY (session_id, user_id)
+   );
+   ```
+
+3. Added new routes:
+   - GET `/party-sessions/players/:session_id`
+     → Lists all players in a session (party members + guests)
+   - POST `/party-sessions/add-player`
+     → Adds a friend to an existing session
+   - POST `/party-sessions/round`
+     → Records round results with multiple winners/losers
+
+4. Enhanced existing routes:
+   - POST `/party-session`
+     → Now auto-adds all party members to session_players
+   - All routes have proper permission checks (admin/session player)
+
+**Impact:**
+- Sessions now support multiple winners per round 🏆
+- Party members are auto-added to sessions 👥
+- Friends can be invited to join sessions 🤝
+- Full tracking of who added which guest 📝
+- Proper permission checks throughout 🔒
+
+Yo Tova! Just pushed these changes. The session tracking is now way more flexible - multiple winners, guest players, the works. Let me know if you need any tweaks! 🎲
+
 ## Date: 2024-12-19
 
 ### Updated GET /users/:id route (Profile endpoint)

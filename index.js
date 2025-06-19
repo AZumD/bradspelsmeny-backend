@@ -1381,14 +1381,37 @@ app.post('/party-session', verifyToken, async (req, res) => {
   }
 
   try {
-    const result = await pool.query(`
-    INSERT INTO party_sessions (party_id, game_id, game_title, created_by, notes)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING *
+    // Start transaction
+    await pool.query('BEGIN');
+
+    // 1. Create the session
+    const sessionResult = await pool.query(`
+      INSERT INTO party_sessions (party_id, game_id, game_title, created_by, notes)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
     `, [partyId, gameId, gameTitle || null, userId, notes || null]);
 
-    res.status(201).json(result.rows[0]);
+    const sessionId = sessionResult.rows[0].id;
+
+    // 2. Get all party members
+    const membersResult = await pool.query(`
+      SELECT user_id 
+      FROM party_members 
+      WHERE party_id = $1
+    `, [partyId]);
+
+    // 3. Add all party members to session_players
+    for (const member of membersResult.rows) {
+      await pool.query(`
+        INSERT INTO session_players (session_id, user_id, added_by)
+        VALUES ($1, $2, $3)
+      `, [sessionId, member.user_id, userId]);
+    }
+
+    await pool.query('COMMIT');
+    res.status(201).json(sessionResult.rows[0]);
   } catch (err) {
+    await pool.query('ROLLBACK');
     console.error('❌ Failed to create session:', err);
     res.status(500).json({ error: 'Failed to create session' });
   }
@@ -2051,5 +2074,135 @@ app.get('/party-sessions/history/:party_id', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('❌ Error fetching party session history:', err);
     res.status(500).json({ error: 'Failed to fetch party session history' });
+  }
+});
+
+// Get all players in a session (party members + invited guests)
+app.get('/party-sessions/players/:session_id', verifyToken, async (req, res) => {
+  const { session_id } = req.params;
+  const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
+
+  try {
+    // Check if user is admin or session player
+    if (!isAdmin) {
+      const playerCheck = await pool.query(
+        'SELECT 1 FROM session_players WHERE session_id = $1 AND user_id = $2',
+        [session_id, userId]
+      );
+      
+      if (playerCheck.rowCount === 0) {
+        return res.status(403).json({ error: 'Forbidden - Must be session player or admin' });
+      }
+    }
+
+    const result = await pool.query(`
+      SELECT u.id, u.first_name, u.last_name, sp.added_by
+      FROM session_players sp
+      JOIN users u ON sp.user_id = u.id
+      WHERE sp.session_id = $1
+      ORDER BY u.first_name, u.last_name
+    `, [session_id]);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Error fetching session players:', err);
+    res.status(500).json({ error: 'Failed to fetch session players' });
+  }
+});
+
+// Add a friend to a session
+app.post('/party-sessions/add-player', verifyToken, async (req, res) => {
+  const { session_id, user_id } = req.body;
+  const addedBy = req.user.id;
+
+  try {
+    // 1. Check if adder is in the session
+    const adderCheck = await pool.query(
+      'SELECT 1 FROM session_players WHERE session_id = $1 AND user_id = $2',
+      [session_id, addedBy]
+    );
+
+    if (adderCheck.rowCount === 0) {
+      return res.status(403).json({ error: 'Must be a session player to add friends' });
+    }
+
+    // 2. Check if they're friends (TODO: implement friendship check)
+    // For now, just check if user exists
+    const userCheck = await pool.query(
+      'SELECT 1 FROM users WHERE id = $1',
+      [user_id]
+    );
+
+    if (userCheck.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // 3. Add the friend to session_players
+    await pool.query(`
+      INSERT INTO session_players (session_id, user_id, added_by)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (session_id, user_id) DO NOTHING
+    `, [session_id, user_id, addedBy]);
+
+    res.status(201).json({ success: true });
+  } catch (err) {
+    console.error('❌ Error adding player to session:', err);
+    res.status(500).json({ error: 'Failed to add player to session' });
+  }
+});
+
+// Add a round result
+app.post('/party-sessions/round', verifyToken, async (req, res) => {
+  const { session_id, winners, losers, notes, round_number } = req.body;
+  const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
+
+  if (!session_id || !winners || !Array.isArray(winners) || winners.length === 0) {
+    return res.status(400).json({ error: 'Missing required fields or invalid winners array' });
+  }
+
+  try {
+    // Check if user is admin or session player
+    if (!isAdmin) {
+      const playerCheck = await pool.query(
+        'SELECT 1 FROM session_players WHERE session_id = $1 AND user_id = $2',
+        [session_id, userId]
+      );
+      
+      if (playerCheck.rowCount === 0) {
+        return res.status(403).json({ error: 'Forbidden - Must be session player or admin' });
+      }
+    }
+
+    // Get next round number if not provided
+    let nextRoundNumber = round_number;
+    if (!nextRoundNumber) {
+      const lastRound = await pool.query(`
+        SELECT MAX(round_number) as last_round
+        FROM party_session_rounds
+        WHERE session_id = $1
+      `, [session_id]);
+      nextRoundNumber = (lastRound.rows[0].last_round || 0) + 1;
+    }
+
+    // Add round result
+    const result = await pool.query(`
+      INSERT INTO party_session_rounds 
+        (session_id, round_number, winners, losers, notes)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [
+      session_id,
+      nextRoundNumber,
+      winners,
+      losers || [],
+      notes || null
+    ]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('❌ Error adding round result:', err);
+    res.status(500).json({ error: 'Failed to add round result' });
   }
 });
