@@ -2,6 +2,18 @@
 
 ## Date: 2024-03-22
 
+### 🚀 Session Tracking 2.0 - PUSHED!
+
+Yo Tova! Just pushed all the session tracking upgrades to main. Everything's live and ready to rock:
+
+- Multiple winners per round ✅
+- Guest players can join sessions ✅
+- Auto-adding party members ✅
+- All permission checks in place ✅
+- Data migration completed smoothly ✅
+
+Frontend should be good to go with the new routes. Let me know if anything needs tweaking! 🎮
+
 ### 🎲 Session Tracking 2.0: Multiple Winners & Guest Players
 
 Yo Tova! Just pushed some major upgrades to our session tracking system. Here's what's new:
@@ -412,3 +424,17 @@ also I'll help fix the column name issue. However, I notice that the /party-sess
 - Frontend party profile page can now display session history
 - Maintains consistent permission model with other party routes
 - Completes the party session tracking feature set
+
+### 🔍 Added Missing Session Details Route
+
+Yo Tova! Claude was getting 404s trying to fetch session details, so I added the missing endpoint:
+
+GET `/party-sessions/:id`
+- Returns full session details with game info (title, image)
+- Added proper permission checks:
+  - Session players can access ✅
+  - Party members can access ✅
+  - Admins can access ✅
+  - Everyone else gets a 403 🚫
+
+Should fix Claude's session page loading issues. Let him know it's ready! 🎲

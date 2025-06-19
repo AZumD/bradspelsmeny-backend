@@ -2206,3 +2206,53 @@ app.post('/party-sessions/round', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to add round result' });
   }
 });
+
+// Get a specific party session by ID
+app.get('/party-sessions/:id', verifyToken, async (req, res) => {
+  const sessionId = req.params.id;
+  const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
+
+  try {
+    // Check if user is admin or session player or party member
+    if (!isAdmin) {
+      // First check session_players table
+      const playerCheck = await pool.query(
+        `SELECT 1 FROM session_players WHERE session_id = $1 AND user_id = $2`,
+        [sessionId, userId]
+      );
+
+      if (playerCheck.rowCount === 0) {
+        // If not in session_players, check if they're a party member
+        const partyMemberCheck = await pool.query(
+          `SELECT 1 FROM party_sessions ps
+           JOIN party_members pm ON ps.party_id = pm.party_id
+           WHERE ps.id = $1 AND pm.user_id = $2`,
+          [sessionId, userId]
+        );
+
+        if (partyMemberCheck.rowCount === 0) {
+          return res.status(403).json({ error: 'Forbidden - Must be session player, party member, or admin' });
+        }
+      }
+    }
+
+    // Fetch session with game details
+    const session = await pool.query(
+      `SELECT ps.*, g.title, g.img
+       FROM party_sessions ps
+       JOIN games g ON ps.game_id = g.id
+       WHERE ps.id = $1`,
+      [sessionId]
+    );
+
+    if (session.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    res.json(session.rows[0]);
+  } catch (err) {
+    console.error('Failed to fetch session:', err);
+    res.status(500).json({ error: 'Failed to fetch session' });
+  }
+});
