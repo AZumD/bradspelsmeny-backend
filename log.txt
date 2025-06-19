@@ -2,6 +2,19 @@
 
 ## Date: 2024-03-22
 
+### 🎲 Added Session Rounds Route
+
+2025-06-19 - Baclaude
+✅ Added route GET /party-sessions/rounds/:session_id to fetch session rounds with proper permissions
+
+Added proper permission checks:
+- Admins can access any session's rounds
+- Party members can access their party's session rounds
+- Session players can access their session's rounds
+- Everyone else gets a 403 🚫
+
+Now Claude can finally see those round results! 🎮
+
 ### 🔄 Added Active Session to Party Route
 
 Yo Tova! Fixed that missing active_session_id in the party route:

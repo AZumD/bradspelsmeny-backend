@@ -2263,3 +2263,47 @@ app.get('/party-sessions/:id', verifyToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch session' });
   }
 });
+
+// Get all rounds for a specific session
+app.get('/party-sessions/rounds/:session_id', verifyToken, async (req, res) => {
+  const { session_id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    // Permission check: must be admin, party member, or session player
+    const partyCheck = await pool.query(`
+      SELECT ps.party_id, u.role FROM party_sessions ps
+      LEFT JOIN users u ON u.id = $1
+      WHERE ps.id = $2
+    `, [userId, session_id]);
+
+    if (!partyCheck.rows.length) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const { party_id, role } = partyCheck.rows[0];
+
+    if (role !== 'admin') {
+      const isAuthorized = await pool.query(`
+        SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2
+        UNION
+        SELECT 1 FROM session_players WHERE session_id = $3 AND user_id = $2
+      `, [party_id, userId, session_id]);
+
+      if (!isAuthorized.rows.length) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+    }
+
+    const rounds = await pool.query(`
+      SELECT * FROM party_session_rounds
+      WHERE session_id = $1
+      ORDER BY round_number ASC
+    `, [session_id]);
+
+    res.json(rounds.rows);
+  } catch (err) {
+    console.error("❌ Failed to fetch session rounds:", err);
+    res.status(500).json({ error: "Failed to fetch session rounds" });
+  }
+});
