@@ -276,3 +276,61 @@ Note: These changes ensure that:
 ✅ Database schema consistency maintained 
 
 also I'll help fix the column name issue. However, I notice that the /party-sessions/history/:partyId route doesn't actually exist in the codebase. The closest routes we have are /party/:id/sessions and /party/:id/all-sessions. Let me check and fix the active sessions route first
+
+## Date: 2024-03-21
+
+### Added Missing Route: GET /party-sessions/history/:party_id
+
+**File:** `index.js`
+
+**Issue Identified:**
+- Frontend was trying to fetch data from `/party-sessions/history/:party_id` but the route didn't exist
+- This route is needed for the party profile page to show past sessions
+
+**Changes Made:**
+1. **Added New Route:**
+   ```javascript
+   app.get('/party-sessions/history/:party_id', verifyToken, async (req, res) => {
+     // Permission check - must be admin or party member
+     if (!isAdmin) {
+       const memberCheck = await pool.query(
+         'SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2',
+         [party_id, userId]
+       );
+       
+       if (memberCheck.rowCount === 0) {
+         return res.status(403).json({ error: 'Forbidden - Must be party member or admin' });
+       }
+     }
+
+     // Fetch completed sessions
+     const result = await pool.query(`
+       SELECT id, party_id, game_id, started_at, returned_at
+       FROM party_sessions
+       WHERE party_id = $1
+         AND returned_at IS NOT NULL
+       ORDER BY started_at DESC
+     `, [party_id]);
+     // ...
+   });
+   ```
+
+**Route Behavior:**
+- Returns all completed sessions for a party (where `returned_at IS NOT NULL`)
+- Orders sessions by start date, most recent first
+- Returns 404 if no completed sessions found
+- Enforces proper access control:
+  - Admins can access any party's history
+  - Regular users must be party members
+
+**Requirements Met:**
+✅ Added missing route for party session history  
+✅ Uses correct `returned_at` column name  
+✅ Proper permission checks (admin or party member)  
+✅ Consistent error handling with other routes  
+✅ Returns data in expected format  
+
+**Impact:**
+- Frontend party profile page can now display session history
+- Maintains consistent permission model with other party routes
+- Completes the party session tracking feature set

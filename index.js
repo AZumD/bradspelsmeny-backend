@@ -2016,3 +2016,40 @@ if (require.main === module) {
 }
 
 module.exports = { app, verifyToken };
+
+app.get('/party-sessions/history/:party_id', verifyToken, async (req, res) => {
+  const { party_id } = req.params;
+  const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
+
+  try {
+    // Check permissions - must be admin or party member
+    if (!isAdmin) {
+      const memberCheck = await pool.query(
+        'SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2',
+        [party_id, userId]
+      );
+      
+      if (memberCheck.rowCount === 0) {
+        return res.status(403).json({ error: 'Forbidden - Must be party member or admin' });
+      }
+    }
+
+    const result = await pool.query(`
+      SELECT id, party_id, game_id, started_at, returned_at
+      FROM party_sessions
+      WHERE party_id = $1
+        AND returned_at IS NOT NULL
+      ORDER BY started_at DESC
+    `, [party_id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No sessions' });
+    }
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Error fetching party session history:', err);
+    res.status(500).json({ error: 'Failed to fetch party session history' });
+  }
+});
