@@ -1169,15 +1169,22 @@ app.get('/party/:id', verifyToken, async (req, res) => {
 
     const result = await pool.query(`
     SELECT
-    p.id,
-    p.name,
-    p.emoji,
-    p.invite_code,
-    p.avatar,
-    p.created_by,
-    p.created_at,
-    u.first_name AS creator_first_name,
-    u.last_name AS creator_last_name
+      p.id,
+      p.name,
+      p.emoji,
+      p.invite_code,
+      p.avatar,
+      p.created_by,
+      p.created_at,
+      (
+        SELECT id 
+        FROM party_sessions 
+        WHERE party_id = p.id AND returned_at IS NULL
+        ORDER BY started_at DESC 
+        LIMIT 1
+      ) AS active_session_id,
+      u.first_name AS creator_first_name,
+      u.last_name AS creator_last_name
     FROM parties p
     LEFT JOIN users u ON p.created_by = u.id
     WHERE p.id = $1

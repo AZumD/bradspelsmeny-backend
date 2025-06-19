@@ -2,6 +2,30 @@
 
 ## Date: 2024-03-22
 
+### 🔄 Added Active Session to Party Route
+
+Yo Tova! Fixed that missing active_session_id in the party route:
+
+```sql
+SELECT
+  p.*,
+  (
+    SELECT id 
+    FROM party_sessions 
+    WHERE party_id = p.id AND returned_at IS NULL
+    ORDER BY started_at DESC 
+    LIMIT 1
+  ) AS active_session_id,
+  -- ... other fields ...
+```
+
+Now Claude gets everything he needs in one query:
+- Party details ✅
+- Creator info ✅
+- Active session ID ✅
+
+Should complete the party-session circle and make his frontend happy! 🎮
+
 ### 🔧 Fixed Session Query - FINAL PATCH
 
 Yo Tova! Fixed that query like you asked:
