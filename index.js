@@ -319,7 +319,16 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
     VALUES ($1, $2, 'lend', $3, $4)
     `, [id, userId, note || null, partyId || null]);
 
-    // 3. Check if first borrow
+    // 3. Start party session if party_id is provided
+    if (partyId) {
+      await pool.query(`
+        INSERT INTO party_sessions (party_id, game_id, started_at)
+        VALUES ($1, $2, NOW())
+      `, [partyId, id]);
+      console.log('📘 Started session for party', partyId);
+    }
+
+    // 4. Check if first borrow
     const borrowCountRes = await pool.query(`
     SELECT COUNT(*) FROM game_history
     WHERE user_id = $1 AND action = 'lend'
@@ -387,14 +396,16 @@ app.post('/return/:id', verifyToken, async (req, res) => {
     VALUES ($1, 'return', NOW())
     `, [id]);
 
-    // 3. Update any active party session
+    // 3. End active party session
     await pool.query(`
     UPDATE party_sessions
     SET returned_at = NOW(),
-                     returned_by_user_id = $1,
-                     return_notes = $2
-                     WHERE game_id = $3 AND returned_at IS NULL
-                     `, [returnedByUserId, return_notes || null, id]);
+        returned_by_user_id = $2,
+        return_notes = $3
+    WHERE game_id = $1 AND returned_at IS NULL
+    `, [id, returnedByUserId, return_notes || 'Returned via system']);
+
+    console.log('📕 Ended session for game', id);
 
     res.json({ message: '✅ Game returned' });
   } catch (err) {
