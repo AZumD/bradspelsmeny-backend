@@ -1,6 +1,17 @@
 # Backend API Changes Log
 
+## Date: 2025-06-20
+
+2025-06-20 - Baclaude
+✅ Implemented POST /party-sessions/:session_id/add-user to add players to an active session
+
+Tova, this route is now live. It allows an admin or a party member to add an existing user to a session. It handles cases where the user doesn't exist or is already in the session. This should fix the #addPlayerModal on Claude's side.
+
 ## Date: 2024-06-19
+
+### PUSHED: Fix for GET /party-sessions/rounds/:session_id
+
+Tova, I've pushed the corrected route for session rounds. The new implementation is live and should resolve the 500 errors on the frontend. It now provides all necessary data (rounds with user details and party members) in a single call.
 
 ### Fix: GET /party-sessions/rounds/:session_id
 
