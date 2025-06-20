@@ -2271,6 +2271,7 @@ app.get('/party-sessions/rounds/:session_id', verifyToken, async (req, res) => {
   const isAdmin = req.user.role === 'admin';
 
   try {
+    // Permissions Check
     const sessionResult = await pool.query(
       'SELECT party_id FROM party_sessions WHERE id = $1',
       [sessionId]
@@ -2290,58 +2291,45 @@ app.get('/party-sessions/rounds/:session_id', verifyToken, async (req, res) => {
       }
     }
 
-    const roundsRes = await pool.query(`
-      SELECT
-        psr.id AS round_id,
-        psr.round_number,
-        psr.notes,
-        psrr.result,
-        u.id AS user_id,
-        u.first_name,
-        u.last_name,
-        u.avatar_url
-      FROM
-        party_session_rounds psr
-      LEFT JOIN
-        party_session_round_results psrr ON psr.id = psrr.round_id
-      LEFT JOIN
-        users u ON psrr.user_id = u.id
-      WHERE
-        psr.session_id = $1
-      ORDER BY
-        psr.round_number ASC;
+    // 1. Fetch raw round data
+    const { rows: roundRows } = await pool.query(`
+      SELECT id, round_number, notes, winners, losers
+      FROM party_session_rounds
+      WHERE session_id = $1
+      ORDER BY round_number ASC
     `, [sessionId]);
 
-    const grouped = {};
-    roundsRes.rows.forEach(row => {
-      if (!row.round_id) return;
-      if (!grouped[row.round_id]) {
-        grouped[row.round_id] = {
-          id: row.round_id,
-          round_number: row.round_number,
-          notes: row.notes,
-          winners: [],
-          losers: []
-        };
-      }
-
-      if (row.user_id) {
-        const user = {
-          id: row.user_id,
-          first_name: row.first_name,
-          last_name: row.last_name,
-          avatar_url: row.avatar_url
-        };
-
-        if (row.result === 'winner') {
-          grouped[row.round_id].winners.push(user);
-        } else if (row.result === 'loser') {
-          grouped[row.round_id].losers.push(user);
-        }
-      }
+    // 2. Build a complete set of all referenced user IDs
+    const allUserIds = new Set();
+    roundRows.forEach(row => {
+      (row.winners || []).forEach(id => allUserIds.add(id));
+      (row.losers || []).forEach(id => allUserIds.add(id));
     });
 
-    res.json({ rounds: Object.values(grouped) });
+    const userMap = {};
+    if (allUserIds.size > 0) {
+      // 3. Fetch the user names
+      const usersResult = await pool.query(`
+        SELECT id, first_name, last_name, avatar_url
+        FROM users
+        WHERE id = ANY($1::int[])
+      `, [[...allUserIds]]);
+
+      usersResult.rows.forEach(u => {
+        userMap[u.id] = u;
+      });
+    }
+
+    // 4. Return structured result
+    const rounds = roundRows.map(r => ({
+      id: r.id,
+      round_number: r.round_number,
+      notes: r.notes,
+      winners: (r.winners || []).map(id => userMap[id] || { id, first_name: "Unknown", last_name: "" }),
+      losers: (r.losers || []).map(id => userMap[id] || { id, first_name: "Unknown", last_name: "" })
+    }));
+
+    res.json({ rounds });
 
   } catch (err) {
     console.error("❌ Failed to fetch session rounds:", err);
