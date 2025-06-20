@@ -75,12 +75,43 @@ const createPartySessionMembersTable = async (pool) => {
   }
 };
 
+// Add active_session_id to parties and set up the foreign key constraint
+const addActiveSessionIdToParties = async (pool) => {
+  // This migration is now obsolete, the logic is handled by a subquery.
+  // We are now dropping the column to clean up the schema.
+  try {
+    // First, remove the foreign key constraint if it exists
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_name = 'fk_active_session'
+        ) THEN
+          ALTER TABLE parties DROP CONSTRAINT fk_active_session;
+        END IF;
+      END $$;
+    `);
+
+    // Now, drop the column if it exists
+    await pool.query(`
+      ALTER TABLE parties
+      DROP COLUMN IF EXISTS active_session_id;
+    `);
+    console.log('✅ Dropped obsolete active_session_id column from parties table');
+  } catch (err) {
+    console.error('❌ Error dropping active_session_id column:', err);
+    throw err;
+  }
+};
+
 // Run migrations
 const runMigrations = async () => {
   try {
     await updatePartySessionRounds(pool);
     await createSessionPlayersTable(pool);
     await createPartySessionMembersTable(pool);
+    await addActiveSessionIdToParties(pool);
     console.log('🎉 All migrations completed successfully');
     process.exit(0);
   } catch (err) {
