@@ -336,7 +336,7 @@ app.get('/stats/lent-out', verifyToken, async (req, res) => {
 
 app.post('/lend/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { userId, note, partyId, tableId } = req.body; // Standardize to party_id maybe later
+  const { userId, note, party_id, tableId } = req.body; 
 
   if (!userId || isNaN(parseInt(userId))) {
     return res.status(400).json({ error: 'Missing or invalid userId' });
@@ -361,11 +361,11 @@ app.post('/lend/:id', verifyToken, async (req, res) => {
     await pool.query(`
     INSERT INTO game_history (game_id, user_id, action, note, party_id, table_id)
     VALUES ($1, $2, 'lend', $3, $4, $5)
-    `, [id, userId, note || null, partyId || null, tableId || null]);
+    `, [id, userId, note || null, party_id || null, tableId || null]);
 
     // 4. Start party session if party_id is provided
-    if (partyId) {
-        await createPartySession(partyId, id, userId, gameTitle);
+    if (party_id) {
+        await createPartySession(party_id, id, userId, gameTitle);
     }
 
     // 5. Check for 'First Borrow' badge
