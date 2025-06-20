@@ -39,6 +39,45 @@ app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads', 'avat
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+async function createPartySession(party_id, game_id, user_id, game_title) {
+  if (!party_id) return null;
+
+  try {
+    // 1. Create the party session
+    const sessionRes = await pool.query(
+      `INSERT INTO party_sessions (party_id, game_id, created_by, started_at, game_title)
+       VALUES ($1, $2, $3, NOW(), $4)
+       RETURNING id`,
+      [party_id, game_id, user_id, game_title]
+    );
+    const sessionId = sessionRes.rows[0].id;
+
+    // 2. Get all current party members
+    const membersRes = await pool.query(
+      'SELECT user_id FROM party_members WHERE party_id = $1',
+      [party_id]
+    );
+    const memberIds = membersRes.rows.map(r => r.user_id);
+
+    // 3. Add all members to the session
+    for (const memberId of memberIds) {
+      await pool.query(
+        `INSERT INTO party_session_members (session_id, user_id, added_by)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (session_id, user_id) DO NOTHING`,
+        [sessionId, memberId, user_id]
+      );
+    }
+
+    console.log(`✅ Created party session ${sessionId} for party ${party_id} with ${memberIds.length} members.`);
+    return sessionId;
+  } catch (err) {
+    console.error('❌ Failed to create party session:', err);
+    // We don't re-throw, as failing to create a session shouldn't block the main action (lending/ordering)
+    return null;
+  }
+}
+
 function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
@@ -297,38 +336,39 @@ app.get('/stats/lent-out', verifyToken, async (req, res) => {
 
 app.post('/lend/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { userId, note, partyId } = req.body;
+  const { userId, note, partyId, tableId } = req.body; // Standardize to party_id maybe later
 
   if (!userId || isNaN(parseInt(userId))) {
     return res.status(400).json({ error: 'Missing or invalid userId' });
   }
 
   try {
-    // 1. Lend the game
+    // 1. Get game title
+    const gameRes = await pool.query('SELECT title_en FROM games WHERE id = $1', [id]);
+    const gameTitle = gameRes.rows.length > 0 ? gameRes.rows[0].title_en : 'Unknown Game';
+
+
+    // 2. Lend the game
     await pool.query(`
     UPDATE games
     SET lent_out = true,
     last_lent = NOW(),
-                     times_lent = COALESCE(times_lent, 0) + 1
-                     WHERE id = $1
-                     `, [id]);
+    times_lent = COALESCE(times_lent, 0) + 1
+    WHERE id = $1
+    `, [id]);
 
-    // 2. Insert into history (now includes optional party_id)
+    // 3. Insert into history
     await pool.query(`
-    INSERT INTO game_history (game_id, user_id, action, note, party_id)
-    VALUES ($1, $2, 'lend', $3, $4)
-    `, [id, userId, note || null, partyId || null]);
+    INSERT INTO game_history (game_id, user_id, action, note, party_id, table_id)
+    VALUES ($1, $2, 'lend', $3, $4, $5)
+    `, [id, userId, note || null, partyId || null, tableId || null]);
 
-    // 3. Start party session if party_id is provided
+    // 4. Start party session if party_id is provided
     if (partyId) {
-      await pool.query(`
-        INSERT INTO party_sessions (party_id, game_id, started_at)
-        VALUES ($1, $2, NOW())
-      `, [partyId, id]);
-      console.log('📘 Started session for party', partyId);
+        await createPartySession(partyId, id, userId, gameTitle);
     }
 
-    // 4. Check if first borrow
+    // 5. Check for 'First Borrow' badge
     const borrowCountRes = await pool.query(`
     SELECT COUNT(*) FROM game_history
     WHERE user_id = $1 AND action = 'lend'
@@ -521,25 +561,20 @@ app.post('/order-game', async (req, res) => {
 
     let partySessionId = null;
 
-    // 3. Handle party logic
+    // 3. Handle party logic by calling the reusable function
     if (party_id) {
-      // 3a. Create party session using created_by
-      const partySessionResult = await pool.query(
-        `INSERT INTO party_sessions (party_id, game_id, created_by, started_at)
-        VALUES ($1, $2, $3, NOW())
-        RETURNING id`,
-        [party_id, game_id, user_id]
-      );
-      partySessionId = partySessionResult.rows[0].id;
+        const actualGameTitle = game_title || (await pool.query('SELECT title_en FROM games WHERE id = $1', [game_id])).rows[0]?.title_en || 'Unknown Game';
+        partySessionId = await createPartySession(party_id, game_id, user_id, actualGameTitle);
 
-      // 3b. Get all members
+      // This part of the logic seems to be about individual user history,
+      // which might be different from the session itself.
+      // Let's keep it here for now.
       const membersResult = await pool.query(
         `SELECT user_id FROM party_members WHERE party_id = $1`,
         [party_id]
       );
       const partyMembers = membersResult.rows.map(row => row.user_id);
 
-      // 3c. Log game for each member
       for (const memberId of partyMembers) {
         await pool.query(
           `INSERT INTO game_history (user_id, game_id, party_id, action, timestamp)
@@ -548,7 +583,6 @@ app.post('/order-game', async (req, res) => {
         );
       }
 
-      // 3d. Add main user if not already included
       if (!partyMembers.includes(user_id)) {
         await pool.query(
           `INSERT INTO game_history (user_id, game_id, party_id, action, timestamp)

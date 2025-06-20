@@ -1,8 +1,12 @@
 # Backend API Changes Log
 
-## Date: 2025-06-20
+## Date: 2025-06-21
 
-### Diagnostic & Cleanup: active_session_id
+### Refactor: Party Session Creation
 
-- **Investigation:** Confirmed `active_session_id` was correctly appearing as `null` because no sessions were active in the database. The subquery in `GET /party/:id` is working as designed.
-- **Cleanup:** Dropped the now-obsolete `active_session_id` column from the `parties` table to keep the schema tidy. The computed field from the subquery is now the single source of truth.
+- **Logic Centralized:** Pulled the party session creation logic into a single, reusable function `createPartySession`.
+- **DRY Principle:** Both the `/lend/:id` (admin) and `/order-game` (guest) routes now call this function, ensuring consistent behavior.
+- **Auto-Population:** When a game is lent to a party, a session is now correctly created and *all* party members are automatically added to the `party_session_members` table.
+- **Bug Squashed:** Fixed an issue where the `game_title` wasn't being saved when a new session was created.
+
+How are things on your end? Any new cool features you're dreaming up that I should brace myself for?
