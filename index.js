@@ -2331,52 +2331,49 @@ app.get('/party-sessions/rounds/:session_id', verifyToken, async (req, res) => {
 });
 
 app.post('/party-sessions/:session_id/add-user', verifyToken, async (req, res) => {
-  const { session_id } = req.params;
+  const sessionId = req.params.session_id;
   const { user_id } = req.body;
   const requesterId = req.user.id;
   const isAdmin = req.user.role === 'admin';
 
   if (!user_id) {
-    return res.status(400).json({ error: 'Missing user_id in request body' });
+    return res.status(400).json({ error: 'Missing user_id' });
   }
 
   try {
-    // 1. Get party_id from session_id
-    const sessionRes = await pool.query('SELECT party_id FROM party_sessions WHERE id = $1', [session_id]);
-    if (sessionRes.rowCount === 0) {
+    const sessionQuery = await pool.query('SELECT party_id FROM party_sessions WHERE id = $1', [sessionId]);
+    if (sessionQuery.rowCount === 0) {
       return res.status(404).json({ error: 'Session not found' });
     }
-    const { party_id } = sessionRes.rows[0];
-
-    // 2. Check permissions
+  
+    const partyId = sessionQuery.rows[0].party_id;
+  
     if (!isAdmin) {
       const memberCheck = await pool.query(
         'SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2',
-        [party_id, requesterId]
+        [partyId, requesterId]
       );
       if (memberCheck.rowCount === 0) {
-        return res.status(403).json({ error: 'Access denied: must be a party member or admin' });
+        return res.status(403).json({ error: 'Access denied' });
       }
     }
-    
-    // 3. Check if user to be added exists
-    const userExists = await pool.query('SELECT 1 FROM users WHERE id = $1', [user_id]);
-    if (userExists.rowCount === 0) {
-      return res.status(404).json({ error: 'User to be added not found' });
-    }
-
-    // 4. Insert into session_players, ignoring if already exists
-    await pool.query(
-      `INSERT INTO session_players (session_id, user_id, added_by)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (session_id, user_id) DO NOTHING`,
-      [session_id, user_id, requesterId]
+  
+    const alreadyMember = await pool.query(
+      'SELECT 1 FROM party_session_members WHERE session_id = $1 AND user_id = $2',
+      [sessionId, user_id]
     );
-
-    res.status(200).json({ success: true, message: 'User added to session' });
-
+    if (alreadyMember.rowCount > 0) {
+      return res.status(200).json({ message: 'User already in session' });
+    }
+  
+    await pool.query(
+      'INSERT INTO party_session_members (session_id, user_id) VALUES ($1, $2)',
+      [sessionId, user_id]
+    );
+  
+    res.status(200).json({ success: true });
   } catch (err) {
-    console.error(`❌ Failed to add user to session ${session_id}:`, err);
+    console.error(`❌ Failed to add user to session ${sessionId}:`, err);
     res.status(500).json({ error: 'Failed to add user to session' });
   }
 });
