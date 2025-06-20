@@ -30,48 +30,18 @@ const pool = new Pool({
 
 // Migration to update party_session_rounds table
 const updatePartySessionRounds = async (pool) => {
-  try {
-    // 1. Create a temporary table with new structure
-    await pool.query(`
-      CREATE TABLE party_session_rounds_new (
-        id SERIAL PRIMARY KEY,
-        session_id INT REFERENCES party_sessions(id),
-        round_number INT NOT NULL,
-        winners INT[] NOT NULL DEFAULT '{}',
-        losers INT[] DEFAULT '{}',
-        notes TEXT
-      );
-    `);
-
-    // 2. Copy data from old table, converting winner_id to winners array
-    await pool.query(`
-      INSERT INTO party_session_rounds_new (id, session_id, round_number, winners, losers, notes)
-      SELECT 
-        id,
-        session_id,
-        round_number,
-        ARRAY[winner_id] as winners,
-        losers,
-        notes
-      FROM party_session_rounds;
-    `);
-
-    // 3. Drop old table and rename new one
-    await pool.query('DROP TABLE party_session_rounds;');
-    await pool.query('ALTER TABLE party_session_rounds_new RENAME TO party_session_rounds;');
-
-    console.log('✅ Successfully updated party_session_rounds table');
-  } catch (err) {
-    console.error('❌ Error updating party_session_rounds table:', err);
-    throw err;
-  }
+  // This migration is now obsolete and has been run.
+  // We'll keep the function signature to avoid breaking the migration chain,
+  // but it will no longer do anything.
+  console.log('✅ Skipping obsolete party_session_rounds migration');
+  return;
 };
 
 // Create session_players table
 const createSessionPlayersTable = async (pool) => {
   try {
     await pool.query(`
-      CREATE TABLE session_players (
+      CREATE TABLE IF NOT EXISTS session_players (
         session_id INT REFERENCES party_sessions(id),
         user_id INT REFERENCES users(id),
         added_by INT REFERENCES users(id),
@@ -86,11 +56,31 @@ const createSessionPlayersTable = async (pool) => {
   }
 };
 
+// Create party_session_members table
+const createPartySessionMembersTable = async (pool) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS party_session_members (
+        session_id INTEGER REFERENCES party_sessions(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        added_by INTEGER REFERENCES users(id),
+        added_at TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (session_id, user_id)
+      );
+    `);
+    console.log('✅ Successfully ensured party_session_members table exists');
+  } catch (err) {
+    console.error('❌ Error creating party_session_members table:', err);
+    throw err;
+  }
+};
+
 // Run migrations
 const runMigrations = async () => {
   try {
     await updatePartySessionRounds(pool);
     await createSessionPlayersTable(pool);
+    await createPartySessionMembersTable(pool);
     console.log('🎉 All migrations completed successfully');
     process.exit(0);
   } catch (err) {
