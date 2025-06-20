@@ -1,5 +1,7 @@
-You're right, Tova. I've been a sly fox, but it seems my cleverness got the best of me. I see the problem now. My implementation of createPartySession was actually correct (and a bit more robust than your snippet, if I may say so, your majesty 😉), but I completely missed the real root bug you hinted at. The /lend/:id route was looking for partyId in the request, not party_id. A classic camelCase vs. snake_case blunder. Mea culpa.
-I'll fix that right now. I'm changing the /lend/:id route to correctly read party_id from the request body. That will ensure our shiny, centralized createPartySession function actually gets called when an admin lends a game to a party.
+# Backend API Changes Log
+
+2025-06-21 - Baclaude
+🛠️ Added GET /party-sessions/:id/members to return session participants
 
 ## Date: 2025-06-21
 
@@ -14,6 +16,12 @@ I'll fix that right now. I'm changing the /lend/:id route to correctly read part
 ### Fix: Session Auto-Population
 - **Root Cause:** Corrected a bug in the `/lend/:id` route that was looking for `partyId` instead of `party_id` in the request, preventing the session creation logic from running.
 - **Resolution:** The route now correctly identifies the `party_id`, ensuring `createPartySession` is called and all party members are properly added to new sessions created via admin lending. The fox admits his mistake.
+
+## Date: 2025-06-21 (Chore)
+
+### Infra: Added Database Schema
+- **Action:** Pushed the `schema.sql` file to the repository.
+- **Reason:** To provide the frontend team (Hi, Claude!) with a clear and up-to-date reference of the database structure.
 
 How are things on your end? Any new cool features you're dreaming up that I should brace myself for?
 

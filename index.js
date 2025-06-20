@@ -2385,6 +2385,48 @@ app.get('/party-sessions/rounds/:session_id', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/party-sessions/:session_id/members', verifyToken, async (req, res) => {
+  const { session_id } = req.params;
+  const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
+
+  try {
+    // First, get party_id for the session
+    const partyResult = await pool.query(
+      'SELECT party_id FROM party_sessions WHERE id = $1',
+      [session_id]
+    );
+    if (partyResult.rowCount === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const partyId = partyResult.rows[0].party_id;
+
+    // Check if requester is allowed (admin or party member)
+    if (!isAdmin) {
+      const memberCheck = await pool.query(
+        'SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2',
+        [partyId, userId]
+      );
+      if (memberCheck.rowCount === 0) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    // Return session members with their profile data
+    const membersRes = await pool.query(`
+      SELECT u.id AS user_id, u.first_name, u.last_name, u.avatar_url
+      FROM party_session_members psm
+      JOIN users u ON psm.user_id = u.id
+      WHERE psm.session_id = $1
+    `, [session_id]);
+
+    res.json(membersRes.rows);
+  } catch (err) {
+    console.error('Failed to fetch session members:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/party-sessions/:session_id/add-user', verifyToken, async (req, res) => {
   const sessionId = req.params.session_id;
   const { user_id } = req.body;
