@@ -40,6 +40,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 async function createPartySession(party_id, game_id, user_id, game_title) {
+  console.log("🟡 createPartySession called with:", { game_id, user_id, party_id });
   if (!party_id) return null;
 
   try {
@@ -51,15 +52,19 @@ async function createPartySession(party_id, game_id, user_id, game_title) {
       [party_id, game_id, user_id, game_title]
     );
     const sessionId = sessionRes.rows[0].id;
+    console.log("✅ New session inserted:", sessionRes.rows[0]);
 
     // 2. Get all current party members
+    console.log("📥 Fetching party members for party_id:", party_id);
     const membersRes = await pool.query(
       'SELECT user_id FROM party_members WHERE party_id = $1',
       [party_id]
     );
     const memberIds = membersRes.rows.map(r => r.user_id);
+    console.log("👥 Found party members:", membersRes.rows);
 
     // 3. Add all members to the session
+    console.log("🧩 Preparing inserts for party_session_members...");
     for (const memberId of memberIds) {
       await pool.query(
         `INSERT INTO party_session_members (session_id, user_id, added_by)
@@ -68,11 +73,11 @@ async function createPartySession(party_id, game_id, user_id, game_title) {
         [sessionId, memberId, user_id]
       );
     }
+    console.log("🎉 All party members added to session_members.");
 
-    console.log(`✅ Created party session ${sessionId} for party ${party_id} with ${memberIds.length} members.`);
     return sessionId;
   } catch (err) {
-    console.error('❌ Failed to create party session:', err);
+    console.error("❌ Failed to populate party_session_members:", err);
     // We don't re-throw, as failing to create a session shouldn't block the main action (lending/ordering)
     return null;
   }

@@ -1,5 +1,10 @@
 # Backend API Changes Log
 
+2025-06-22 - Baclaude
+🐞 DEBUG: Added extensive logging to `createPartySession` to trace member population issue.
+- Added logs to track function calls, member fetching, and insert operations.
+- Now monitoring server logs to diagnose the silent failure.
+
 2025-06-21 - Baclaude
 🛠️ Added GET /party-sessions/:id/members to return session participants
 
