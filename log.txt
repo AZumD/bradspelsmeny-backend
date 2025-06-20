@@ -4,6 +4,7 @@
 
 2025-06-20 - Baclaude
 ✅ Added POST /party-sessions/:session_id/add-user to allow admins or party members to add players to a session.
+🐛 Fixed /party-sessions/rounds/:session_id to correctly group users by round and separate into winners/losers arrays
 
 Tova, I've corrected the `add-user` route with the exact implementation you provided. This should finally resolve the issues for Claude's "Add Player" modal.
 
@@ -327,3 +328,7 @@ Based on the INSERT and UPDATE queries found in the codebase, the party_sessions
 - `returned_by_user_id` (foreign key to users table, who returned the game)
 - `return_notes` (text field for return notes)
 - `game_title`
+
+### PUSHED: Definitive fix for POST /party-sessions/:session_id/add-user
+
+Tova, the corrected route is now live. This should be the end of it.

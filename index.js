@@ -2290,40 +2290,59 @@ app.get('/party-sessions/rounds/:session_id', verifyToken, async (req, res) => {
       }
     }
 
-    // Fetch all session players to resolve winner/loser details
-    const allPlayersInSession = await pool.query(`
-      SELECT u.id, u.first_name, u.last_name, u.avatar_url
-      FROM session_players sp
-      JOIN users u ON sp.user_id = u.id
-      WHERE sp.session_id = $1
-    `, [sessionId]);
-    const playersMap = new Map(allPlayersInSession.rows.map(p => [p.id, p]));
-
     const roundsRes = await pool.query(`
-      SELECT *
-      FROM party_session_rounds
-      WHERE session_id = $1
-      ORDER BY round_number ASC
+      SELECT
+        psr.id AS round_id,
+        psr.round_number,
+        psr.notes,
+        psrr.result,
+        u.id AS user_id,
+        u.first_name,
+        u.last_name,
+        u.avatar_url
+      FROM
+        party_session_rounds psr
+      LEFT JOIN
+        party_session_round_results psrr ON psr.id = psrr.round_id
+      LEFT JOIN
+        users u ON psrr.user_id = u.id
+      WHERE
+        psr.session_id = $1
+      ORDER BY
+        psr.round_number ASC;
     `, [sessionId]);
 
-    const roundsWithDetails = roundsRes.rows.map(round => ({
-      ...round,
-      winners: round.winners.map(winnerId => playersMap.get(winnerId)).filter(Boolean),
-      losers: round.losers.map(loserId => playersMap.get(loserId)).filter(Boolean)
-    }));
-    
-    const membersRes = await pool.query(`
-      SELECT u.id, u.first_name, u.last_name, u.avatar_url
-      FROM party_members pm
-      JOIN users u ON pm.user_id = u.id
-      WHERE pm.party_id = $1
-      ORDER BY u.first_name ASC
-    `, [partyId]);
+    const grouped = {};
+    roundsRes.rows.forEach(row => {
+      if (!row.round_id) return;
+      if (!grouped[row.round_id]) {
+        grouped[row.round_id] = {
+          id: row.round_id,
+          round_number: row.round_number,
+          notes: row.notes,
+          winners: [],
+          losers: []
+        };
+      }
 
-    res.json({
-      rounds: roundsWithDetails,
-      members: membersRes.rows
+      if (row.user_id) {
+        const user = {
+          id: row.user_id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          avatar_url: row.avatar_url
+        };
+
+        if (row.result === 'winner') {
+          grouped[row.round_id].winners.push(user);
+        } else if (row.result === 'loser') {
+          grouped[row.round_id].losers.push(user);
+        }
+      }
     });
+
+    res.json({ rounds: Object.values(grouped) });
+
   } catch (err) {
     console.error("❌ Failed to fetch session rounds:", err);
     res.status(500).json({ error: "Failed to fetch session rounds" });
