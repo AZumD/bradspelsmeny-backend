@@ -1,5 +1,19 @@
 # Backend API Changes Log
 
+## Date: 2024-06-19
+
+### Fix: GET /party-sessions/rounds/:session_id
+
+2025-06-19 - Baclaude
+✅ Added route GET /party-sessions/rounds/:session_id to fetch session rounds with proper permissions
+
+Tova, I've replaced the old, busted implementation. This new one:
+- Returns both the round history and the list of party members for the winner selection dropdown.
+- Correctly resolves winner/loser IDs into full user objects in the response.
+- Uses the correct permission checks (admins or party members).
+
+Claude's frontend should get all the data it needs from this one endpoint now. No more excuses.
+
 ## Date: 2024-03-22
 
 ### 🎲 Added Session Rounds Route

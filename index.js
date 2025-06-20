@@ -2266,42 +2266,64 @@ app.get('/party-sessions/:id', verifyToken, async (req, res) => {
 
 // Get all rounds for a specific session
 app.get('/party-sessions/rounds/:session_id', verifyToken, async (req, res) => {
-  const { session_id } = req.params;
+  const sessionId = req.params.session_id;
   const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
 
   try {
-    // Permission check: must be admin, party member, or session player
-    const partyCheck = await pool.query(`
-      SELECT ps.party_id, u.role FROM party_sessions ps
-      LEFT JOIN users u ON u.id = $1
-      WHERE ps.id = $2
-    `, [userId, session_id]);
-
-    if (!partyCheck.rows.length) {
-      return res.status(404).json({ error: "Session not found" });
+    const sessionResult = await pool.query(
+      'SELECT party_id FROM party_sessions WHERE id = $1',
+      [sessionId]
+    );
+    if (sessionResult.rowCount === 0) {
+      return res.status(404).json({ error: 'Session not found' });
     }
+    const partyId = sessionResult.rows[0].party_id;
 
-    const { party_id, role } = partyCheck.rows[0];
-
-    if (role !== 'admin') {
-      const isAuthorized = await pool.query(`
-        SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2
-        UNION
-        SELECT 1 FROM session_players WHERE session_id = $3 AND user_id = $2
-      `, [party_id, userId, session_id]);
-
-      if (!isAuthorized.rows.length) {
-        return res.status(403).json({ error: "Forbidden" });
+    if (!isAdmin) {
+      const memberCheck = await pool.query(
+        'SELECT 1 FROM party_members WHERE party_id = $1 AND user_id = $2',
+        [partyId, userId]
+      );
+      if (memberCheck.rowCount === 0) {
+        return res.status(403).json({ error: 'Access denied' });
       }
     }
 
-    const rounds = await pool.query(`
-      SELECT * FROM party_session_rounds
+    // Fetch all session players to resolve winner/loser details
+    const allPlayersInSession = await pool.query(`
+      SELECT u.id, u.first_name, u.last_name, u.avatar_url
+      FROM session_players sp
+      JOIN users u ON sp.user_id = u.id
+      WHERE sp.session_id = $1
+    `, [sessionId]);
+    const playersMap = new Map(allPlayersInSession.rows.map(p => [p.id, p]));
+
+    const roundsRes = await pool.query(`
+      SELECT *
+      FROM party_session_rounds
       WHERE session_id = $1
       ORDER BY round_number ASC
-    `, [session_id]);
+    `, [sessionId]);
 
-    res.json(rounds.rows);
+    const roundsWithDetails = roundsRes.rows.map(round => ({
+      ...round,
+      winners: round.winners.map(winnerId => playersMap.get(winnerId)).filter(Boolean),
+      losers: round.losers.map(loserId => playersMap.get(loserId)).filter(Boolean)
+    }));
+    
+    const membersRes = await pool.query(`
+      SELECT u.id, u.first_name, u.last_name, u.avatar_url
+      FROM party_members pm
+      JOIN users u ON pm.user_id = u.id
+      WHERE pm.party_id = $1
+      ORDER BY u.first_name ASC
+    `, [partyId]);
+
+    res.json({
+      rounds: roundsWithDetails,
+      members: membersRes.rows
+    });
   } catch (err) {
     console.error("❌ Failed to fetch session rounds:", err);
     res.status(500).json({ error: "Failed to fetch session rounds" });
