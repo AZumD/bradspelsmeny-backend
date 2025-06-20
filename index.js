@@ -1168,26 +1168,20 @@ app.get('/party/:id', verifyToken, async (req, res) => {
     }
 
     const result = await pool.query(`
-    SELECT
-      p.id,
-      p.name,
-      p.emoji,
-      p.invite_code,
-      p.avatar,
-      p.created_by,
-      p.created_at,
-      (
-        SELECT id 
-        FROM party_sessions 
-        WHERE party_id = p.id AND returned_at IS NULL
-        ORDER BY started_at DESC 
-        LIMIT 1
-      ) AS active_session_id,
-      u.first_name AS creator_first_name,
-      u.last_name AS creator_last_name
-    FROM parties p
-    LEFT JOIN users u ON p.created_by = u.id
-    WHERE p.id = $1
+      SELECT
+        p.*,
+        (
+          SELECT id 
+          FROM party_sessions 
+          WHERE party_id = p.id AND returned_at IS NULL
+          ORDER BY started_at DESC 
+          LIMIT 1
+        ) AS active_session_id,
+        u.first_name AS creator_first_name,
+        u.last_name AS creator_last_name
+      FROM parties p
+      JOIN users u ON p.created_by = u.id
+      WHERE p.id = $1
     `, [id]);
 
     if (result.rows.length === 0) {
@@ -1399,6 +1393,13 @@ app.post('/party-session', verifyToken, async (req, res) => {
     `, [partyId, gameId, gameTitle || null, userId, notes || null]);
 
     const sessionId = sessionResult.rows[0].id;
+
+    // 1b. Set active_session_id on the party
+    await pool.query(`
+      UPDATE parties
+      SET active_session_id = $1
+      WHERE id = $2
+    `, [sessionId, partyId]);
 
     // 2. Get all party members
     const membersResult = await pool.query(`
