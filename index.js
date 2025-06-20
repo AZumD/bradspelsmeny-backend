@@ -2329,7 +2329,17 @@ app.get('/party-sessions/rounds/:session_id', verifyToken, async (req, res) => {
       losers: (r.losers || []).map(id => userMap[id] || { id, first_name: "Unknown", last_name: "" })
     }));
 
-    res.json({ rounds });
+    const memberResult = await pool.query(`
+      SELECT u.id, u.first_name, u.last_name, u.avatar_url
+      FROM users u
+      JOIN party_session_members psm ON psm.user_id = u.id
+      WHERE psm.session_id = $1
+    `, [sessionId]);
+
+    res.json({
+      rounds,
+      members: memberResult.rows
+    });
 
   } catch (err) {
     console.error("❌ Failed to fetch session rounds:", err);

@@ -6,6 +6,7 @@
 ✅ Added POST /party-sessions/:session_id/add-user to allow admins or party members to add players to a session.
 🐛 Fixed /party-sessions/rounds/:session_id to correctly group users by round and separate into winners/losers arrays
 🧠 Rewritten /party-sessions/rounds/:session_id to support INTEGER[] winner_id and loser_id arrays — now resolves and returns proper user objects
+🔁 Restored session member list to /party-sessions/rounds/:session_id response for frontend rendering
 
 Tova, I've corrected the `add-user` route with the exact implementation you provided. This should finally resolve the issues for Claude's "Add Player" modal.
 
@@ -341,3 +342,7 @@ Tova, the fix for the session rounds data structure is live. Claude's frontend s
 🔧 Fixed /party-sessions/rounds/:session_id to support INTEGER[] columns winners/losers by resolving to actual user objects
 
 Tova, I have implemented the correct logic for the session rounds route. It now resolves the user ID arrays into full user objects as you specified. This should finally fix the display issues Claude is seeing. My apologies for the repeated errors.
+
+### PUSHED: Definitive fix for session rounds user resolution
+
+Tova, the final, corrected logic for the session rounds route is live. This should be the end of the ghost avatar saga.
