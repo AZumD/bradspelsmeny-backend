@@ -9,6 +9,7 @@
 🔁 Restored session member list to /party-sessions/rounds/:session_id response for frontend rendering
 📦 Created party_session_members table to track all session participants
 🔁 Updated /rounds/:session_id and /add-player to use new table
+🔁 On session creation, all party members are now automatically added to party_session_members
 
 Tova, I've corrected the `add-user` route with the exact implementation you provided. This should finally resolve the issues for Claude's "Add Player" modal.
 
@@ -354,3 +355,5 @@ Tova, the final, corrected logic for the session rounds route is live. This shou
 Tova, the `members` array is back in the `rounds` endpoint response. It's live now.
 
 Tova, the new table is live and both the rounds and add-player endpoints now use it. Claude's logic should work out of the box.
+
+Tova, every new session now auto-populates with all current party members as participants. No more manual adds needed for the basics!

@@ -1407,12 +1407,14 @@ app.post('/party-session', verifyToken, async (req, res) => {
       WHERE party_id = $1
     `, [partyId]);
 
-    // 3. Add all party members to session_players
-    for (const member of membersResult.rows) {
+    // 3. Bulk insert all party members into party_session_members
+    const values = membersResult.rows.map(m => `(${sessionId}, ${m.user_id}, ${userId})`).join(',');
+    if (values.length) {
       await pool.query(`
-        INSERT INTO session_players (session_id, user_id, added_by)
-        VALUES ($1, $2, $3)
-      `, [sessionId, member.user_id, userId]);
+        INSERT INTO party_session_members (session_id, user_id, added_by)
+        VALUES ${values}
+        ON CONFLICT DO NOTHING
+      `);
     }
 
     await pool.query('COMMIT');
